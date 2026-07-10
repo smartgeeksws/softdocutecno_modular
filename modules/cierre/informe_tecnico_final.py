@@ -995,3 +995,20 @@ if __name__ == "__main__":
     }
 
     generar_documento_informe_final(datos_prueba)
+# =========================================================
+# ALIAS REQUERIDO POR app.py
+# =========================================================
+
+def render_informe_tecnico_final(*args, **kwargs):
+    if "render_modulo_informe_final" in globals():
+        return render_modulo_informe_final(*args, **kwargs)
+
+    if "mostrar_modulo_informe_final" in globals():
+        return mostrar_modulo_informe_final(*args, **kwargs)
+
+    if "main" in globals():
+        return main(*args, **kwargs)
+
+    raise RuntimeError(
+        "No se encontró una función de renderizado para el módulo de Informe Técnico Final."
+    )
