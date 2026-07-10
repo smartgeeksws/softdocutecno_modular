@@ -12,6 +12,7 @@ from ui.navigation import (
 )
 
 from modules.cierre.modelo_negocio import render_modelo_negocio
+from modules.cierre.acta_cierre import render_acta_cierre
 
 
 def main() -> None:
@@ -72,7 +73,10 @@ def main() -> None:
                 modelo_openai=modelo_openai,
             )
         elif documento == "acta_cierre_ficha":
-            st.warning("Módulo pendiente de migrar: Acta de cierre y ficha de caracterización.")
+            render_acta_cierre(
+                modo_prueba=modo_prueba,
+                modelo_openai=modelo_openai,
+            )
         elif documento == "informe_tecnico_final":
             st.warning("Módulo pendiente de migrar: Informe técnico final.")
         else:
