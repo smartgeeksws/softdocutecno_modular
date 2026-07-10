@@ -15,6 +15,7 @@ from modules.cierre.modelo_negocio import render_modelo_negocio
 from modules.cierre.acta_cierre import render_acta_cierre
 from modules.inicio.acta_inicio import render_acta_inicio
 from modules.inicio.confidencialidad import render_confidencialidad
+from modules.inicio.uso_infraestructura import render_uso_infraestructura
 
 
 def main() -> None:
@@ -47,8 +48,11 @@ def main() -> None:
                 modo_prueba=modo_prueba,
                 modelo_openai=modelo_openai,
     )
-        elif documento == "uso_infraestructura":
-            st.warning("Módulo pendiente de migrar: Uso de infraestructura.")
+        elif documento_inicio == "Uso de infraestructura":
+            render_uso_infraestructura(
+                modo_prueba=modo_prueba,
+                modelo_openai=modelo_openai,
+    )
         elif documento == "confidencialidad":
             render_confidencialidad(
                 modo_prueba=modo_prueba,
