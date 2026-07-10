@@ -48,7 +48,7 @@ def main() -> None:
                 modo_prueba=modo_prueba,
                 modelo_openai=modelo_openai,
     )
-        elif documento_inicio == "Uso de infraestructura":
+        elif documento == "Uso de infraestructura":
             render_uso_infraestructura(
                 modo_prueba=modo_prueba,
                 modelo_openai=modelo_openai,
