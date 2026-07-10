@@ -69,8 +69,10 @@ def main() -> None:
 
         if documento == "cronograma":
             st.warning("Módulo pendiente de migrar: Cronograma.")
+
         elif documento == "estado_arte":
             st.warning("Módulo pendiente de migrar: Estado del arte.")
+
         else:
             st.info("Selecciona un documento de planeación.")
 
@@ -87,13 +89,16 @@ def main() -> None:
                 modo_prueba=modo_prueba,
                 modelo_openai=modelo_openai,
             )
+
         elif documento == "acta_cierre_ficha":
             render_acta_cierre(
                 modo_prueba=modo_prueba,
                 modelo_openai=modelo_openai,
             )
+
         elif documento == "informe_tecnico_final":
             st.warning("Módulo pendiente de migrar: Informe técnico final.")
+
         else:
             st.info("Selecciona un documento de cierre.")
 
