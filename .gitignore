@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+
+.venv/
+.env
+
+.streamlit/secrets.toml
+
+output/
+documentos_generados/
+data/*.json
+
+*.pdf
+*.docx
+*.xlsx
+datos_*.json
