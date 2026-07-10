@@ -14,6 +14,7 @@ from ui.navigation import (
 from modules.cierre.modelo_negocio import render_modelo_negocio
 from modules.cierre.acta_cierre import render_acta_cierre
 from modules.inicio.acta_inicio import render_acta_inicio
+from modules.inicio.confidencialidad import render_confidencialidad
 
 
 def main() -> None:
@@ -49,7 +50,10 @@ def main() -> None:
         elif documento == "uso_infraestructura":
             st.warning("Módulo pendiente de migrar: Uso de infraestructura.")
         elif documento == "confidencialidad":
-            st.warning("Módulo pendiente de migrar: Confidencialidad.")
+            render_confidencialidad(
+                modo_prueba=modo_prueba,
+                modelo_openai=modelo_openai,
+    )
         else:
             st.info("Selecciona un documento de inicio.")
 
