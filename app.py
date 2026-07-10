@@ -13,6 +13,9 @@ from ui.navigation import (
 
 from modules.cierre.modelo_negocio import render_modelo_negocio
 from modules.cierre.acta_cierre import render_acta_cierre
+from modules.cierre.informe_tecnico_final import (
+    render_informe_tecnico_final,
+)
 
 from modules.inicio.acta_inicio import render_acta_inicio
 from modules.inicio.confidencialidad import render_confidencialidad
@@ -110,7 +113,10 @@ def main() -> None:
             )
 
         elif documento == "informe_tecnico_final":
-            st.warning("Módulo pendiente de migrar: Informe técnico final.")
+                render_informe_tecnico_final(
+                    modo_prueba=modo_prueba,
+                    modelo_openai=modelo_openai,
+                )
 
         else:
             st.info("Selecciona un documento de cierre.")
