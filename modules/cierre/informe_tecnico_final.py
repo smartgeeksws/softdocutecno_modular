@@ -1113,13 +1113,46 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
         datos.get("archivos_anexos", []),
     )
 
-    documento.core_properties.title = (
-        f"Informe Final - {datos.get('nombre_proyecto', '')}"
+    # =========================================================
+# PROPIEDADES INTERNAS DEL DOCUMENTO WORD
+# Se usa el código del proyecto para evitar errores por más de 255 caracteres
+# =========================================================
+# =========================================================
+# PROPIEDADES INTERNAS DEL DOCUMENTO WORD
+# Se usa el código del proyecto para evitar errores por más de 255 caracteres
+# =========================================================
+
+    def limpiar_texto_propiedad_word(texto, limite=250):
+        texto = str(texto or "").replace("\n", " ").replace("\r", " ").strip()
+        if len(texto) > limite:
+            return texto[:limite - 3] + "..."
+        return texto
+
+
+    codigo_proyecto = (
+        datos.get("codigo_proyecto")
+        or datos.get("codigo")
+        or datos.get("codigo_tecnoparque")
+        or datos.get("codigo_sennova")
+        or datos.get("id_proyecto")
+        or "SIN_CODIGO"
     )
-    documento.core_properties.subject = CODIGO_FORMATO_INFORME
-    documento.core_properties.keywords = (
-        "SENA, TecnoParque, Informe Final, GCDTP-F-023 V01"
+
+    codigo_proyecto = str(codigo_proyecto).strip()
+
+    if not codigo_proyecto:
+        codigo_proyecto = "SIN_CODIGO"
+
+
+    documento.core_properties.title = limpiar_texto_propiedad_word(
+        f"Informe Final - {codigo_proyecto}"
     )
+
+    documento.core_properties.subject = "Informe Final Tecnoparque"
+    documento.core_properties.author = "Tecnoparque"
+    documento.core_properties.keywords = "SENA, TecnoParque, Informe Final, GCDTP-F-023 V01"
+
+    
 
     documento.save(str(ruta_salida))
 
