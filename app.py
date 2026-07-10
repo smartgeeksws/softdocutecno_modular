@@ -13,10 +13,13 @@ from ui.navigation import (
 
 from modules.cierre.modelo_negocio import render_modelo_negocio
 from modules.cierre.acta_cierre import render_acta_cierre
+
 from modules.inicio.acta_inicio import render_acta_inicio
 from modules.inicio.confidencialidad import render_confidencialidad
 from modules.inicio.uso_infraestructura import render_uso_infraestructura
+
 from modules.planeacion.cronograma import render_cronograma
+from modules.planeacion.estado_arte import render_estado_arte
 
 
 def main() -> None:
@@ -75,7 +78,10 @@ def main() -> None:
             )
 
         elif documento == "estado_arte":
-            st.warning("Módulo pendiente de migrar: Estado del arte.")
+            render_estado_arte(
+                modo_prueba=modo_prueba,
+                modelo_openai=modelo_openai,
+            )
 
         else:
             st.info("Selecciona un documento de planeación.")
