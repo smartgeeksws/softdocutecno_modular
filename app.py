@@ -47,17 +47,20 @@ def main() -> None:
             render_acta_inicio(
                 modo_prueba=modo_prueba,
                 modelo_openai=modelo_openai,
-    )
-        elif documento == "Uso de infraestructura":
+            )
+
+        elif documento == "uso_infraestructura":
             render_uso_infraestructura(
                 modo_prueba=modo_prueba,
                 modelo_openai=modelo_openai,
-    )
+            )
+
         elif documento == "confidencialidad":
             render_confidencialidad(
                 modo_prueba=modo_prueba,
                 modelo_openai=modelo_openai,
-    )
+            )
+
         else:
             st.info("Selecciona un documento de inicio.")
 
