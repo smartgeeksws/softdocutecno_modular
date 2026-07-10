@@ -1012,3 +1012,26 @@ def render_informe_tecnico_final(*args, **kwargs):
     raise RuntimeError(
         "No se encontró una función de renderizado para el módulo de Informe Técnico Final."
     )
+
+# =========================================================
+# ALIAS FINAL CORREGIDO REQUERIDO POR app.py
+# Este bloque sobrescribe cualquier alias anterior.
+# =========================================================
+
+def render_informe_tecnico_final(
+    modo_prueba=False,
+    modelo_openai=None,
+    datos_base=None,
+    *args,
+    **kwargs
+):
+    """
+    Función compatible con app.py.
+    Recibe modo_prueba y modelo_openai, pero no los pasa al formulario,
+    porque render_modulo_informe_final no los necesita.
+    """
+
+    if datos_base is None:
+        datos_base = kwargs.get("datos_base")
+
+    return render_modulo_informe_final(datos_base)
