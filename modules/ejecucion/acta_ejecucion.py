@@ -175,6 +175,30 @@ def _serializar_datos(datos: dict) -> dict:
     return resultado
 
 
+def recalcular_totales_acta_ejecucion(datos: dict) -> dict:
+    """Actualiza horas, honorarios y total general del acta."""
+    total_equipos_materiales = sum(
+        float(item.get("valor_total", 0))
+        for item in datos.get("equipos_materiales", [])
+    )
+
+    total_horas = sum(
+        float(item.get("horas", 0))
+        for item in datos.get("asesorias", [])
+    )
+
+    total_honorarios = total_horas * VALOR_HORA_EXPERTO
+
+    datos["total_equipos_materiales"] = total_equipos_materiales
+    datos["total_horas"] = total_horas
+    datos["total_honorarios"] = total_honorarios
+    datos["total_general"] = (
+        total_equipos_materiales + total_honorarios
+    )
+
+    return datos
+
+
 # =====================================================
 # ASESORÍAS
 # =====================================================
@@ -1300,6 +1324,11 @@ def render_acta_ejecucion(
             "version": VERSION_ACTA_EJECUCION,
         }
 
+        # Limpia valores de edición correspondientes a una generación anterior.
+        for clave in list(st.session_state.keys()):
+            if clave.startswith("ejecucion_editar_horas_"):
+                del st.session_state[clave]
+
         st.session_state.datos_acta_ejecucion_generada = (
             datos_acta_ejecucion
         )
@@ -1359,6 +1388,66 @@ def render_acta_ejecucion(
                 f"{item['horas']} horas - "
                 f"{item['descripcion']}"
             )
+
+        st.warning(
+            "⬇️ Aquí puedes modificar individualmente las horas "
+            "de cada actividad generada."
+        )
+
+        with st.expander(
+            "✏️ Modificar horas de las actividades",
+            expanded=True,
+        ):
+            st.caption(
+                "Ajusta las horas de cada actividad y guarda los cambios. "
+                "Los honorarios y el total general se recalcularán automáticamente."
+            )
+
+            with st.form("form_editar_horas_acta_ejecucion"):
+                horas_editadas: list[float] = []
+
+                for indice, item in enumerate(
+                    datos["asesorias"],
+                    start=1,
+                ):
+                    col_actividad, col_horas = st.columns([4, 1])
+
+                    with col_actividad:
+                        st.markdown(
+                            f"**Actividad {indice}:** "
+                            f"{item['fecha']} — {item['descripcion']}"
+                        )
+
+                    with col_horas:
+                        horas = st.number_input(
+                            f"Horas actividad {indice}",
+                            min_value=0.5,
+                            max_value=24.0,
+                            value=float(item.get("horas", 0) or 0.5),
+                            step=0.5,
+                            key=f"ejecucion_editar_horas_{indice}",
+                        )
+
+                    horas_editadas.append(float(horas))
+
+                guardar_horas = st.form_submit_button(
+                    "💾 Guardar cambios de horas"
+                )
+
+            if guardar_horas:
+                for indice, horas in enumerate(horas_editadas):
+                    datos["asesorias"][indice]["horas"] = float(horas)
+
+                datos = recalcular_totales_acta_ejecucion(datos)
+
+                st.session_state.datos_acta_ejecucion_generada = datos
+                st.session_state.ruta_pdf_acta_ejecucion_generado = None
+
+                st.success(
+                    "Horas actualizadas. Los honorarios y el total general "
+                    "fueron recalculados correctamente."
+                )
+                st.rerun()
 
         st.markdown("### Equipos y materiales")
 
