@@ -21,6 +21,8 @@ from modules.inicio.uso_infraestructura import render_uso_infraestructura
 from modules.planeacion.cronograma import render_cronograma
 from modules.planeacion.estado_arte import render_estado_arte
 
+from modules.ejecucion.acta_ejecucion import render_acta_ejecucion
+
 
 def main() -> None:
     st.set_page_config(
@@ -87,9 +89,10 @@ def main() -> None:
             st.info("Selecciona un documento de planeación.")
 
     elif fase == "ejecucion":
-        st.markdown("---")
-        st.subheader("Acta de ejecución")
-        st.warning("Módulo pendiente de migrar: Acta de ejecución.")
+        render_acta_ejecucion(
+            modo_prueba=modo_prueba,
+            modelo_openai=modelo_openai,
+        )
 
     elif fase == "cierre":
         render_menu_cierre()
