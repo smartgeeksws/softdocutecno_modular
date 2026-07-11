@@ -24,7 +24,7 @@ from utils.validaciones import validar_campos_obligatorios
 
 
 VERSION_INFORME_TECNICO_FINAL = (
-    "VERSION_MODULAR_INFORME_FINAL_GCDTP_F_023_V01_FORMULARIO_SIMPLIFICADO_400"
+    "VERSION_MODULAR_INFORME_FINAL_GCDTP_F_023_V01"
 )
 CODIGO_FORMATO_INFORME = "GCDTP-F-023 V01"
 NOMBRE_PLANTILLA_INFORME = "GCDTP-F-023_V01_Formato_Informe_Final.docx"
@@ -44,26 +44,6 @@ CLASIFICACIONES_INFORMACION = [
     "Pública",
     "Pública Clasificada",
     "Pública Reservada",
-]
-
-METODOLOGIAS_DESARROLLO = [
-    "Design Thinking",
-    "Doble Diamante",
-    "Diseño Centrado en el Usuario (DCU)",
-    "Metodologías ágiles",
-    "Scrum",
-    "Kanban",
-    "Lean Startup",
-    "Stage-Gate",
-    "Desarrollo iterativo de prototipos",
-    "Ingeniería de sistemas y modelo V",
-    "Ciclo de vida en cascada",
-    "CRISP-DM para proyectos de datos e inteligencia artificial",
-    "DMAIC / Six Sigma",
-    "Diseño para Manufactura y Ensamble (DFMA)",
-    "Investigación aplicada y validación experimental",
-    "TRIZ para solución inventiva de problemas",
-    "Otra",
 ]
 
 CLAVES_CONTENIDO = [
@@ -460,261 +440,138 @@ def serializar_datos_informe(datos: dict) -> dict:
 # GENERACIÓN DE CONTENIDO
 # =====================================================
 
-def metodologias_en_texto(datos: dict) -> str:
-    seleccionadas = datos.get("metodologias_seleccionadas", []) or []
-    otras = limpiar_texto(datos.get("otra_metodologia", ""))
+def contenido_modo_prueba(datos: dict) -> dict:
+    especificos = dividir_lineas(
+        datos.get("objetivos_especificos_base", "")
+    )
 
-    metodologias = [
-        limpiar_texto(str(item))
-        for item in seleccionadas
-        if limpiar_texto(str(item)) and str(item) != "Otra"
-    ]
-
-    if otras:
-        metodologias.append(otras)
-
-    return ", ".join(metodologias)
-
-
-def referencias_internas_proyecto(datos: dict) -> list[str]:
-    anio = datos.get("fecha_entrega", date.today()).year
-    nombre = datos.get("nombre_proyecto", "el proyecto")
-
-    return [
-        (
-            f"Red Tecnoparque SENA. ({anio}). Estado del Arte del proyecto "
-            f"{nombre}. Documento de planeación del proyecto."
-        ),
-        (
-            "Las fuentes técnicas, académicas y bibliográficas completas "
-            "consultadas para el análisis del área tecnológica se encuentran "
-            "relacionadas en el documento Estado del Arte de la fase de planeación."
-        ),
-    ]
-
-
-def anexos_desde_archivos(datos: dict) -> list[str]:
-    archivos = datos.get("archivos_anexos", []) or []
-
-    if archivos:
-        return [
-            f"Archivo de soporte: {archivo.get('nombre_original', '')}"
-            for archivo in archivos
+    if len(especificos) < 4:
+        especificos = [
+            "Identificar los requerimientos técnicos, funcionales y operativos de la solución.",
+            "Diseñar los componentes y la arquitectura necesaria para el desarrollo del prototipo.",
+            "Implementar e integrar los componentes definidos mediante un proceso iterativo de construcción.",
+            "Validar el funcionamiento de la solución y documentar los resultados obtenidos.",
         ]
 
-    return [
-        "No se adjuntaron archivos de soporte al momento de generar el informe."
-    ]
-
-
-def _parrafos_complementarios(clave: str, datos: dict) -> list[str]:
-    descripcion = datos.get("descripcion_general_proyecto", "")
-    metodologias = metodologias_en_texto(datos)
-    resultados = datos.get("resultados_obtenidos_base", "")
-    impacto = datos.get("impacto_proyecto_base", "")
-
-    nombres = {
-        "introduccion": "la introducción",
-        "planteamiento_problema": "el planteamiento del problema",
-        "estado_arte_tecnica": "el estado del arte y de la técnica",
-        "metodologia_desarrollo": "la metodología de desarrollo",
-        "desarrollo_proyecto": "el desarrollo del proyecto",
-        "resultados_obtenidos": "los resultados obtenidos",
-        "analisis_viabilidad": "el análisis de viabilidad",
-        "propiedad_transferencia": (
-            "la propiedad intelectual y la transferencia tecnológica"
-        ),
-        "impacto_proyecto": "el impacto del proyecto",
-        "conclusiones": "las conclusiones",
-    }
-    nombre_apartado = nombres.get(clave, "el apartado")
-
-    return [
-        (
-            f"Para consolidar {nombre_apartado}, la información general suministrada "
-            f"se analiza como una descripción integral del proceso: {descripcion} "
-            "Este análisis relaciona la necesidad atendida, las decisiones adoptadas, "
-            "los recursos disponibles y el alcance real del trabajo, sin incorporar "
-            "cifras, validaciones o hechos que no hayan sido reportados."
-        ),
-        (
-            f"El enfoque metodológico declarado —{metodologias or 'no especificado'}— "
-            "permite organizar la experiencia en etapas comprensibles, mantener la "
-            "trazabilidad de las actividades y explicar la relación entre el problema, "
-            "el diseño de la solución, la implementación y la revisión de los avances. "
-            "La redacción distingue entre resultados comprobados y oportunidades que "
-            "todavía requieren validación adicional."
-        ),
-        (
-            f"Los resultados informados fueron los siguientes: {resultados} "
-            "Estos elementos se interpretan en función de los objetivos, el nivel de "
-            "madurez tecnológica y las condiciones de aplicación descritas. El análisis "
-            "evita atribuir desempeños, aprobaciones o beneficios cuantificados que no "
-            "se encuentren expresamente respaldados por la información entregada."
-        ),
-        (
-            f"El impacto reportado se resume así: {impacto} A partir de este insumo se "
-            "establece la contribución del proyecto para sus usuarios y para el entorno "
-            "de aplicación, considerando también las posibilidades de continuidad, "
-            "apropiación, sostenibilidad y escalamiento. Las afirmaciones se presentan "
-            "como resultados observados o como análisis técnico, según corresponda."
-        ),
-    ]
-
-
-def asegurar_minimo_palabras(
-    texto: str,
-    clave: str,
-    datos: dict,
-    minimo: int = 410,
-) -> str:
-    resultado = limpiar_texto(texto)
-    complementos = _parrafos_complementarios(clave, datos)
-    indice = 0
-
-    while len(resultado.split()) < minimo:
-        resultado = f"{resultado}\n\n{complementos[indice % len(complementos)]}"
-        indice += 1
-
-    return resultado.strip()
-
-
-def asegurar_nota_estado_arte(texto: str) -> str:
-    nota = (
-        "El Estado del Arte completo puede consultarse en la documentación "
-        "de planeación del proyecto, específicamente en el documento Estado del Arte."
+    referencias = dividir_lineas(
+        datos.get("referencias_suministradas", "")
     )
 
-    if "documento estado del arte" not in texto.casefold():
-        return f"{texto.strip()}\n\n{nota}"
+    anexos = dividir_lineas(datos.get("descripcion_anexos", ""))
 
-    return texto.strip()
-
-
-def contenido_modo_prueba(datos: dict) -> dict:
-    descripcion = datos.get("descripcion_general_proyecto", "")
-    metodologias = metodologias_en_texto(datos)
-    resultados = datos.get("resultados_obtenidos_base", "")
-    impacto = datos.get("impacto_proyecto_base", "")
-
-    base = {
+    return {
         "introduccion": (
-            f"El presente informe final documenta el proyecto de base tecnológica "
-            f"{datos.get('nombre_proyecto', '')}, identificado con el código "
+            f"El presente informe final documenta el desarrollo del proyecto de base "
+            f"tecnológica {datos.get('nombre_proyecto', '')}, identificado con el código "
             f"{datos.get('codigo_proyecto', '')}. La iniciativa se desarrolló en "
-            f"{datos.get('tecnoparque', '')}, con acompañamiento del experto "
-            f"{datos.get('nombre_experto', '')}. La descripción general suministrada "
-            f"establece el siguiente contexto: {descripcion} El informe organiza esta "
-            "información para explicar la necesidad atendida, el proceso de desarrollo, "
-            "los resultados alcanzados y la contribución de la solución."
+            f"{datos.get('tecnoparque', '')}, con el acompañamiento del experto "
+            f"{datos.get('nombre_experto', '')}. El contexto, propósito y entorno del "
+            f"proyecto fueron los siguientes: {datos.get('contexto_proposito', '')} "
+            f"El trabajo se orientó a obtener una solución verificable y coherente con "
+            f"la línea tecnológica {datos.get('linea_tecnologica', '')}, partiendo de "
+            f"un nivel inicial {datos.get('trl_inicial', '')} y alcanzando el nivel "
+            f"{datos.get('trl_alcanzado', '')}."
         ),
         "planteamiento_problema": (
-            f"La problemática se interpreta a partir de la descripción general del "
-            f"proyecto: {descripcion} El análisis identifica la brecha existente entre "
-            "la situación inicial y la condición que se esperaba alcanzar mediante la "
-            "solución tecnológica. También considera a los usuarios involucrados, las "
-            "limitaciones del contexto y las consecuencias de mantener el problema sin "
-            "una intervención estructurada."
+            f"La problemática o necesidad que dio origen al proyecto se describe así: "
+            f"{datos.get('problema_necesidad', '')} Las causas, consecuencias y el "
+            f"impacto reportado fueron: {datos.get('causas_consecuencias', '')} "
+            f"Esta situación justificó la construcción de una solución tecnológica "
+            f"orientada a reducir las limitaciones identificadas y generar valor para "
+            f"los usuarios o beneficiarios definidos."
         ),
         "objetivo_general": (
-            "Desarrollar y validar una solución de base tecnológica que responda a la "
-            "necesidad identificada, mediante un proceso metodológico de diseño, "
-            "implementación, evaluación y documentación de resultados."
+            limpiar_texto(datos.get("objetivo_general_base", ""))
+            or (
+                "Desarrollar una solución de base tecnológica que responda a la "
+                "problemática identificada mediante actividades de diseño, "
+                "implementación, prototipado y validación."
+            )
         ),
-        "objetivos_especificos": [
-            "Caracterizar la necesidad, los usuarios, los requerimientos y las condiciones de aplicación de la solución.",
-            "Diseñar los componentes, procesos y criterios técnicos necesarios para materializar la propuesta tecnológica.",
-            "Implementar e integrar la solución mediante las metodologías y herramientas seleccionadas para el proyecto.",
-            "Validar los resultados obtenidos, documentar las evidencias y establecer oportunidades de mejora y continuidad.",
-        ],
+        "objetivos_especificos": especificos[:4],
         "estado_arte_tecnica": (
-            f"El área tecnológica relacionada con el proyecto presenta una evolución "
-            "orientada a soluciones más integradas, accesibles, modulares y centradas "
-            "en las necesidades de los usuarios. A partir de la descripción del proyecto "
-            f"—{descripcion}— se reconocen avances asociados con la digitalización, el "
-            "prototipado iterativo, la interoperabilidad, la automatización, el análisis "
-            "de información y la validación temprana de soluciones. Este apartado ofrece "
-            "una síntesis general y no sustituye la revisión documental completa."
+            f"El análisis del estado del arte y de la técnica consideró los siguientes "
+            f"referentes, tendencias, tecnologías y soluciones existentes: "
+            f"{datos.get('referentes_estado_arte', '')} La propuesta desarrollada se "
+            f"diferencia o aporta valor frente a las alternativas disponibles por: "
+            f"{datos.get('diferenciador_innovacion', '')} Las referencias suministradas "
+            f"deben verificarse y mantenerse asociadas con las afirmaciones técnicas "
+            f"incluidas en este apartado."
         ),
         "metodologia_desarrollo": (
-            f"El desarrollo se estructuró con base en las metodologías seleccionadas: "
-            f"{metodologias}. Estas se utilizaron para organizar la comprensión de la "
-            "necesidad, la definición de requerimientos, el diseño de alternativas, la "
-            "construcción del prototipo, la revisión de avances y el ajuste de la solución. "
-            "La metodología se describe como un proceso trazable y adaptable al tipo de proyecto."
+            f"El proyecto se desarrolló mediante el siguiente enfoque metodológico, "
+            f"fases, actividades y herramientas: {datos.get('metodologia_fases', '')} "
+            f"El proceso de validación, prototipado y ajuste se ejecutó de la siguiente "
+            f"manera: {datos.get('proceso_validacion', '')} La metodología permitió "
+            f"mantener trazabilidad entre la necesidad, las decisiones técnicas, los "
+            f"resultados y los ajustes realizados."
         ),
         "desarrollo_proyecto": (
-            f"La ejecución se reconstruye a partir de la descripción general: {descripcion} "
-            f"y del enfoque metodológico seleccionado: {metodologias}. El proceso se "
-            "organizó en actividades de análisis, diseño, preparación de recursos, "
-            "implementación, integración, revisión y documentación, procurando que cada "
-            "decisión guardara relación con la necesidad y con los resultados esperados."
+            f"Durante la ejecución se realizaron las siguientes actividades de diseño, "
+            f"construcción, configuración e integración: "
+            f"{datos.get('actividades_desarrollo', '')} Los componentes y decisiones "
+            f"técnicas principales fueron: {datos.get('componentes_decisiones', '')} "
+            f"El desarrollo avanzó de manera iterativa, incorporando revisiones y "
+            f"ajustes conforme a los resultados parciales obtenidos."
         ),
         "resultados_obtenidos": (
-            f"Los resultados reportados por el usuario fueron: {resultados} Este apartado "
-            "los presenta como productos, avances, prototipos, desarrollos, validaciones "
-            "o evidencias de acuerdo con su naturaleza, y explica su relación con el "
-            "cumplimiento de los objetivos y con la problemática que originó el proyecto."
+            f"Los productos, entregables, prototipos y desarrollos alcanzados fueron: "
+            f"{datos.get('resultados_entregables', '')} Las pruebas, validaciones y "
+            f"evidencias reportadas fueron: {datos.get('pruebas_evidencias', '')} "
+            f"Estos resultados contribuyen al cumplimiento de los objetivos y permiten "
+            f"demostrar el avance técnico alcanzado por la solución."
         ),
         "analisis_viabilidad": (
-            f"La viabilidad se analiza a partir de la descripción del proyecto, los "
-            f"resultados reportados y el impacto esperado. La información base es: "
-            f"{descripcion} Resultados: {resultados} Impacto: {impacto} Se consideran "
-            "las condiciones técnicas, operativas, económicas, normativas y de adopción, "
-            "sin afirmar costos, permisos o comportamientos de mercado no suministrados."
+            f"La viabilidad técnica, operativa, económica, normativa y de mercado se "
+            f"analizó con base en la siguiente información: "
+            f"{datos.get('viabilidad_multidimensional', '')} Las condiciones para su "
+            f"adopción, las limitaciones y las oportunidades de continuidad, "
+            f"escalabilidad o sostenibilidad son: "
+            f"{datos.get('limitaciones_escalabilidad', '')}"
         ),
         "propiedad_transferencia": (
-            f"A partir de la naturaleza del proyecto descrita en {descripcion}, se analizan "
-            "los posibles activos de propiedad intelectual, tales como software, diseños, "
-            "modelos, documentación, prototipos, contenidos o conocimiento técnico. Este "
-            "análisis identifica potenciales mecanismos de protección y transferencia, "
-            "sin afirmar que exista un registro, licencia o derecho concedido."
+            f"Los activos de propiedad intelectual generados o con potencial de "
+            f"protección corresponden a: {datos.get('activos_propiedad_intelectual', '')} "
+            f"Las oportunidades y estrategias de transferencia, adopción, "
+            f"comercialización o apropiación se plantean así: "
+            f"{datos.get('estrategia_transferencia', '')}"
         ),
         "impacto_proyecto": (
-            f"El impacto reportado por el usuario fue: {impacto} Este apartado organiza "
-            "dicha información en dimensiones tecnológicas, sociales, económicas, "
-            "ambientales o productivas, según resulte aplicable, y explica la forma en "
-            "que los resultados aportan valor a usuarios, beneficiarios y procesos del entorno."
+            f"Los beneficios y efectos tecnológicos, sociales, económicos, ambientales "
+            f"o productivos identificados son: {datos.get('impactos_beneficios', '')} "
+            f"Los principales usuarios o beneficiarios y la forma en que reciben valor "
+            f"se describen de la siguiente manera: {datos.get('beneficiarios_valor', '')}"
         ),
         "conclusiones": (
-            f"El cierre del proyecto integra la descripción general —{descripcion}—, los "
-            f"resultados obtenidos —{resultados}— y el impacto identificado —{impacto}—. "
-            "Las conclusiones valoran la pertinencia de la solución, el aprendizaje del "
-            "proceso, el nivel de madurez alcanzado y las oportunidades de mejora, "
-            "continuidad, validación adicional o escalamiento."
+            f"El proyecto permitió consolidar una solución pertinente frente a la "
+            f"problemática identificada y alcanzar resultados coherentes con el nivel "
+            f"{datos.get('trl_alcanzado', '')}. Las principales conclusiones, lecciones "
+            f"aprendidas y oportunidades de mejora, continuidad o escalamiento son: "
+            f"{datos.get('conclusiones_futuro', '')}"
         ),
-        "referencias_bibliograficas": referencias_internas_proyecto(datos),
-        "anexos": anexos_desde_archivos(datos),
+        "referencias_bibliograficas": (
+            referencias
+            or [
+                "No se suministraron referencias bibliográficas verificables. "
+                "Este apartado debe completarse antes de aprobar el informe definitivo."
+            ]
+        ),
+        "anexos": (
+            anexos
+            or [
+                "Evidencias técnicas y documentales relacionadas con el desarrollo "
+                "y la validación del proyecto."
+            ]
+        ),
     }
-
-    for clave in [
-        "introduccion",
-        "planteamiento_problema",
-        "estado_arte_tecnica",
-        "metodologia_desarrollo",
-        "desarrollo_proyecto",
-        "resultados_obtenidos",
-        "analisis_viabilidad",
-        "propiedad_transferencia",
-        "impacto_proyecto",
-        "conclusiones",
-    ]:
-        base[clave] = asegurar_minimo_palabras(base[clave], clave, datos)
-
-    base["estado_arte_tecnica"] = asegurar_nota_estado_arte(
-        base["estado_arte_tecnica"]
-    )
-
-    return base
 
 
 def normalizar_contenido(
     contenido: object,
     respaldo: dict,
-    datos: dict,
 ) -> dict:
     if not isinstance(contenido, dict):
-        contenido = {}
+        return respaldo
 
     resultado: dict = {}
 
@@ -743,8 +600,8 @@ def normalizar_contenido(
 
             resultado[clave] = valor
         else:
-            texto_valor = limpiar_texto(str(valor or ""))
-            resultado[clave] = texto_valor or respaldo[clave]
+            texto = limpiar_texto(str(valor or ""))
+            resultado[clave] = texto or respaldo[clave]
 
     objetivos = resultado["objetivos_especificos"]
     objetivos_respaldo = respaldo["objetivos_especificos"]
@@ -756,30 +613,6 @@ def normalizar_contenido(
             objetivos.append(objetivo)
 
     resultado["objetivos_especificos"] = objetivos[:4]
-    resultado["referencias_bibliograficas"] = referencias_internas_proyecto(datos)
-    resultado["anexos"] = anexos_desde_archivos(datos)
-
-    for clave in [
-        "introduccion",
-        "planteamiento_problema",
-        "estado_arte_tecnica",
-        "metodologia_desarrollo",
-        "desarrollo_proyecto",
-        "resultados_obtenidos",
-        "analisis_viabilidad",
-        "propiedad_transferencia",
-        "impacto_proyecto",
-        "conclusiones",
-    ]:
-        resultado[clave] = asegurar_minimo_palabras(
-            resultado[clave],
-            clave,
-            datos,
-        )
-
-    resultado["estado_arte_tecnica"] = asegurar_nota_estado_arte(
-        resultado["estado_arte_tecnica"]
-    )
 
     return resultado
 
@@ -789,31 +622,43 @@ def generar_contenido_con_ia(
     modelo_openai: str,
 ) -> dict:
     respaldo = contenido_modo_prueba(datos)
-    metodologias = metodologias_en_texto(datos)
 
-    reglas_comunes = """
+    instrucciones = """
 Actúa como redactor técnico senior de proyectos de base tecnológica de la Red
-TecnoParque SENA. Redacta un Informe Final institucional en español formal,
-coherente, técnico y verificable.
+TecnoParque SENA. Genera el contenido de un Informe Final institucional.
 
-REGLAS OBLIGATORIAS
-- Usa exclusivamente la descripción general, las metodologías seleccionadas,
-  los resultados reportados, el impacto informado y los datos generales.
-- No inventes nombres, cifras, costos, porcentajes, pruebas, validaciones,
-  certificaciones, normas, patentes, registros, clientes, ventas ni referencias.
-- Cuando una condición no haya sido comprobada, utiliza lenguaje analítico o
-  condicional, sin presentarla como un hecho.
-- Redacta como informe de cierre, no como propuesta futura.
-- Cada apartado narrativo solicitado debe contener entre 430 y 600 palabras.
-- Evita repetir literalmente la misma información entre apartados.
-- No uses markdown.
-- Responde exclusivamente en JSON válido.
+Reglas obligatorias:
+- Redacta en español formal, técnico, claro y verificable.
+- Usa exclusivamente la información suministrada.
+- No inventes nombres, cifras, pruebas, resultados, normas, referencias, patentes,
+  aceptaciones, costos ni impactos.
+- No afirmes que una prueba fue exitosa si el usuario no lo indicó.
+- No inventes referencias bibliográficas. Utiliza solo las suministradas.
+- El objetivo general debe iniciar con un verbo en infinitivo.
+- Genera exactamente cuatro objetivos específicos, cada uno con verbo en infinitivo.
+- Evita repetir el nombre del proyecto en todos los párrafos.
+- El texto debe corresponder a un informe de cierre, no a una propuesta futura.
+- Responde únicamente en JSON válido, sin markdown.
+
+Extensión orientativa:
+- Introducción: 180 a 260 palabras.
+- Planteamiento del problema: 180 a 280 palabras.
+- Estado del arte y estado de la técnica: 250 a 400 palabras.
+- Metodología de desarrollo: 250 a 400 palabras.
+- Desarrollo del proyecto: 300 a 500 palabras.
+- Resultados obtenidos: 220 a 350 palabras.
+- Análisis de viabilidad: 250 a 400 palabras.
+- Propiedad intelectual y transferencia: 180 a 300 palabras.
+- Impacto: 180 a 300 palabras.
+- Conclusiones: 160 a 260 palabras.
 """
 
-    contexto = f"""
-DATOS GENERALES
+    entrada = f"""
+INFORMACIÓN GENERAL
+Tipo de proyecto: {datos.get('tipo_proyecto', '')}
+Clasificación: {datos.get('clasificacion_informacion', '')}
 Talento: {datos.get('nombre_talento', '')}
-Proyecto: {datos.get('nombre_proyecto', '')}
+Nombre del proyecto: {datos.get('nombre_proyecto', '')}
 Código: {datos.get('codigo_proyecto', '')}
 Experto: {datos.get('nombre_experto', '')}
 Línea tecnológica: {datos.get('linea_tecnologica', '')}
@@ -821,105 +666,108 @@ TRL inicial: {datos.get('trl_inicial', '')}
 TRL alcanzado: {datos.get('trl_alcanzado', '')}
 TecnoParque: {datos.get('tecnoparque', '')}
 
-DESCRIPCIÓN GENERAL DEL PROYECTO
-{datos.get('descripcion_general_proyecto', '')}
+CONTEXTO Y PROBLEMA
+Contexto, origen, propósito y entorno:
+{datos.get('contexto_proposito', '')}
 
-METODOLOGÍAS UTILIZADAS
-{metodologias}
+Problema o necesidad:
+{datos.get('problema_necesidad', '')}
 
-RESULTADOS OBTENIDOS REPORTADOS
-{datos.get('resultados_obtenidos_base', '')}
+Causas, consecuencias e impacto:
+{datos.get('causas_consecuencias', '')}
 
-IMPACTO DEL PROYECTO REPORTADO
-{datos.get('impacto_proyecto_base', '')}
-"""
+OBJETIVOS BASE
+Objetivo general:
+{datos.get('objetivo_general_base', '')}
 
-    instrucciones_bloque_1 = reglas_comunes + """
-Genera los apartados 2, 3, 4, 5 y 6.
+Objetivos específicos:
+{datos.get('objetivos_especificos_base', '')}
 
-REQUISITOS ESPECÍFICOS
-- Introducción: contexto, propósito, entorno, actores y alcance.
-- Planteamiento del problema: necesidad, causas, consecuencias, usuarios
-  afectados y justificación, derivándolo de la descripción general.
-- Objetivo general: una oración con verbo en infinitivo.
-- Objetivos específicos: exactamente cuatro, cada uno con verbo en infinitivo.
-- Estado del arte y estado de la técnica: presenta únicamente un resumen de los
-  principales avances tecnológicos del área del proyecto. No inventes autores ni
-  referencias. Incluye al final esta frase exacta: "El Estado del Arte completo
-  puede consultarse en la documentación de planeación del proyecto,
-  específicamente en el documento Estado del Arte."
-- Metodología: explica de manera coherente cómo se aplicaron las metodologías
-  seleccionadas al análisis, diseño, desarrollo, prototipado, validación y ajuste.
-"""
+ESTADO DEL ARTE Y DIFERENCIACIÓN
+Referentes, tendencias, tecnologías y soluciones existentes:
+{datos.get('referentes_estado_arte', '')}
 
-    entrada_bloque_1 = contexto + """
+Diferenciador, innovación o mejora:
+{datos.get('diferenciador_innovacion', '')}
+
+METODOLOGÍA
+Enfoque, fases, actividades y herramientas:
+{datos.get('metodologia_fases', '')}
+
+Prototipado, pruebas, validación y ajustes:
+{datos.get('proceso_validacion', '')}
+
+DESARROLLO Y RESULTADOS
+Actividades de diseño, construcción, configuración e integración:
+{datos.get('actividades_desarrollo', '')}
+
+Componentes y decisiones técnicas:
+{datos.get('componentes_decisiones', '')}
+
+Resultados, productos, entregables o prototipos:
+{datos.get('resultados_entregables', '')}
+
+Pruebas, validaciones y evidencias:
+{datos.get('pruebas_evidencias', '')}
+
+VIABILIDAD
+Aspectos técnicos, operativos, económicos, normativos y de mercado:
+{datos.get('viabilidad_multidimensional', '')}
+
+Condiciones, limitaciones, sostenibilidad y escalabilidad:
+{datos.get('limitaciones_escalabilidad', '')}
+
+PROPIEDAD INTELECTUAL Y TRANSFERENCIA
+Activos o resultados con potencial de protección:
+{datos.get('activos_propiedad_intelectual', '')}
+
+Estrategias de transferencia, adopción, comercialización o apropiación:
+{datos.get('estrategia_transferencia', '')}
+
+IMPACTO
+Beneficios y efectos tecnológicos, sociales, económicos, ambientales o productivos:
+{datos.get('impactos_beneficios', '')}
+
+Usuarios, beneficiarios y valor generado:
+{datos.get('beneficiarios_valor', '')}
+
+CONCLUSIONES
+Conclusiones, lecciones, mejoras, continuidad y escalamiento:
+{datos.get('conclusiones_futuro', '')}
+
+REFERENCIAS SUMINISTRADAS
+{datos.get('referencias_suministradas', '')}
+
+ANEXOS DESCRITOS
+{datos.get('descripcion_anexos', '')}
 
 ESTRUCTURA JSON OBLIGATORIA
-{
-  "introduccion": "430 a 600 palabras",
-  "planteamiento_problema": "430 a 600 palabras",
-  "objetivo_general": "una oración",
+{{
+  "introduccion": "texto",
+  "planteamiento_problema": "texto",
+  "objetivo_general": "texto",
   "objetivos_especificos": ["objetivo 1", "objetivo 2", "objetivo 3", "objetivo 4"],
-  "estado_arte_tecnica": "430 a 600 palabras",
-  "metodologia_desarrollo": "430 a 600 palabras"
-}
+  "estado_arte_tecnica": "texto",
+  "metodologia_desarrollo": "texto",
+  "desarrollo_proyecto": "texto",
+  "resultados_obtenidos": "texto",
+  "analisis_viabilidad": "texto",
+  "propiedad_transferencia": "texto",
+  "impacto_proyecto": "texto",
+  "conclusiones": "texto",
+  "referencias_bibliograficas": ["referencia 1", "referencia 2"],
+  "anexos": ["anexo 1", "anexo 2"]
+}}
 """
 
-    instrucciones_bloque_2 = reglas_comunes + """
-Genera los apartados 7, 8, 9, 10, 11 y 12.
-
-REQUISITOS ESPECÍFICOS
-- Desarrollo: reconstruye las actividades, fases, componentes y decisiones
-  técnicas a partir de la descripción y de las metodologías seleccionadas.
-- Resultados: utiliza como fuente principal los resultados reportados; explica
-  su relación con los objetivos sin inventar pruebas o desempeños.
-- Viabilidad: analiza dimensiones técnica, operativa, económica, normativa y
-  de adopción; usa lenguaje condicional cuando falten datos comprobables.
-- Propiedad intelectual y transferencia: identifica activos potenciales y
-  estrategias posibles; no afirmes que existen registros concedidos.
-- Impacto: utiliza como fuente principal el impacto reportado y organízalo en
-  dimensiones aplicables al proyecto.
-- Conclusiones: integra pertinencia, resultados, TRL, aprendizajes, mejoras,
-  continuidad y escalamiento sin introducir hechos nuevos.
-"""
-
-    entrada_bloque_2 = contexto + """
-
-ESTRUCTURA JSON OBLIGATORIA
-{
-  "desarrollo_proyecto": "430 a 600 palabras",
-  "resultados_obtenidos": "430 a 600 palabras",
-  "analisis_viabilidad": "430 a 600 palabras",
-  "propiedad_transferencia": "430 a 600 palabras",
-  "impacto_proyecto": "430 a 600 palabras",
-  "conclusiones": "430 a 600 palabras"
-}
-"""
-
-    bloque_1 = generar_json_openai(
-        instrucciones=instrucciones_bloque_1,
-        entrada=entrada_bloque_1,
+    contenido = generar_json_openai(
+        instrucciones=instrucciones,
+        entrada=entrada,
         modelo=modelo_openai,
         temperature=0.2,
     )
 
-    bloque_2 = generar_json_openai(
-        instrucciones=instrucciones_bloque_2,
-        entrada=entrada_bloque_2,
-        modelo=modelo_openai,
-        temperature=0.2,
-    )
-
-    contenido: dict = {}
-    if isinstance(bloque_1, dict):
-        contenido.update(bloque_1)
-    if isinstance(bloque_2, dict):
-        contenido.update(bloque_2)
-
-    contenido["referencias_bibliograficas"] = referencias_internas_proyecto(datos)
-    contenido["anexos"] = anexos_desde_archivos(datos)
-
-    return normalizar_contenido(contenido, respaldo, datos)
+    return normalizar_contenido(contenido, respaldo)
 
 
 # =====================================================
@@ -1150,11 +998,11 @@ def render_informe_tecnico_final(
     )
 
     st.info(
-        "El documento se genera sobre la plantilla oficial GCDTP-F-023 V01. "
-        "El formulario solicita únicamente los datos institucionales y cuatro "
-        "insumos de contenido: descripción general, metodología, resultados e "
-        "impacto. La API redacta los demás apartados con más de 400 palabras. "
-        "Las páginas de instrucciones y control de cambios se eliminan del Word final."
+        "El documento se genera directamente sobre la plantilla oficial "
+        "GCDTP-F-023 V01. Conserva el logo, la portada, la tabla de "
+        "contenido, el encabezado, el pie de página y el código del formato. "
+        "Las páginas de instrucciones y control de cambios se eliminan "
+        "automáticamente del archivo final."
     )
 
     if "datos_informe_tecnico_final_generado" not in st.session_state:
@@ -1163,12 +1011,17 @@ def render_informe_tecnico_final(
     if "ruta_docx_informe_tecnico_final_generado" not in st.session_state:
         st.session_state.ruta_docx_informe_tecnico_final_generado = None
 
-    with st.form("form_informe_tecnico_final_gcdtp_023_simplificado"):
+    with st.form("form_informe_tecnico_final_gcdtp_023"):
         st.markdown("## 1. Información general del proyecto")
 
         col_1, col_2 = st.columns(2)
 
         with col_1:
+            tipo_proyecto = st.selectbox(
+                "Tipo de proyecto",
+                options=TIPOS_PROYECTO_INFORME,
+            )
+
             clasificacion_informacion = st.selectbox(
                 "Clasificación de la información",
                 options=CLASIFICACIONES_INFORMACION,
@@ -1219,54 +1072,183 @@ def render_informe_tecnico_final(
                 value=date.today(),
             )
 
-        st.markdown("## Información para generar el contenido")
+        st.markdown("## 2 y 3. Introducción y planteamiento del problema")
 
-        descripcion_general_proyecto = st.text_area(
-            "Descripción general del proyecto",
+        contexto_proposito = st.text_area(
+            "Contexto, origen, propósito y entorno del proyecto",
             placeholder=(
-                "Describe ampliamente el origen del proyecto, la necesidad, los usuarios, "
-                "el propósito, los componentes, tecnologías utilizadas, actividades "
-                "realizadas, funcionamiento de la solución y contexto de aplicación."
+                "Indica cómo surgió la iniciativa, qué busca desarrollar, "
+                "quién la promovió, dónde se aplicó y cuál fue su contexto."
             ),
-            height=340,
+            height=150,
         )
 
-        metodologias_seleccionadas = st.multiselect(
-            "Metodología o metodologías utilizadas",
-            options=METODOLOGIAS_DESARROLLO,
-            help=(
-                "Puedes seleccionar varias metodologías. Para una metodología no incluida, "
-                "selecciona Otra y escríbela en el campo siguiente."
+        problema_necesidad = st.text_area(
+            "Problemática o necesidad identificada",
+            placeholder=(
+                "Describe la situación concreta que se buscó resolver y "
+                "quiénes resultaban afectados."
             ),
+            height=130,
         )
 
-        otra_metodologia = st.text_input(
-            "Otra metodología utilizada",
+        causas_consecuencias = st.text_area(
+            "Causas, consecuencias e impacto del problema",
             placeholder=(
-                "Escribe aquí una metodología adicional o una combinación propia."
+                "Incluye causas principales, efectos, limitaciones actuales "
+                "e impacto técnico, social, productivo o económico."
             ),
+            height=130,
         )
 
-        resultados_obtenidos_base = st.text_area(
-            "Resultados obtenidos",
-            placeholder=(
-                "Indica los prototipos, productos, desarrollos, entregables, pruebas, "
-                "validaciones y logros realmente obtenidos. No incluyas resultados esperados."
-            ),
-            height=220,
+        st.markdown("## 4. Objetivos")
+
+        objetivo_general_base = st.text_area(
+            "Objetivo general",
+            placeholder="Debe iniciar con un verbo en infinitivo.",
+            height=90,
         )
 
-        impacto_proyecto_base = st.text_area(
-            "Impacto del proyecto",
+        objetivos_especificos_base = st.text_area(
+            "Objetivos específicos",
             placeholder=(
-                "Describe los beneficios y efectos tecnológicos, sociales, económicos, "
-                "ambientales o productivos, los beneficiarios y el valor generado."
+                "Escribe cuatro objetivos, uno por línea. "
+                "Cada objetivo debe iniciar con un verbo en infinitivo."
             ),
-            height=220,
+            height=150,
+        )
+
+        st.markdown("## 5. Estado del arte y estado de la técnica")
+
+        referentes_estado_arte = st.text_area(
+            "Investigaciones, tecnologías, productos, referentes y tendencias",
+            placeholder=(
+                "Describe las soluciones existentes y los referentes "
+                "consultados. Incluye nombres y datos verificables."
+            ),
+            height=150,
+        )
+
+        diferenciador_innovacion = st.text_area(
+            "Valor diferencial, innovación o mejora frente a las alternativas",
+            height=120,
+        )
+
+        st.markdown("## 6. Metodología de desarrollo")
+
+        metodologia_fases = st.text_area(
+            "Enfoque, fases, actividades y herramientas utilizadas",
+            placeholder=(
+                "Ejemplo: Design Thinking, desarrollo iterativo, diseño CAD, "
+                "programación, fabricación, integración y documentación."
+            ),
+            height=160,
+        )
+
+        proceso_validacion = st.text_area(
+            "Prototipado, pruebas, validación, retroalimentación y ajustes",
+            height=140,
+        )
+
+        st.markdown("## 7 y 8. Desarrollo y resultados")
+
+        actividades_desarrollo = st.text_area(
+            "Actividades ejecutadas durante el desarrollo",
+            placeholder=(
+                "Describe diseño, construcción, configuración, integración, "
+                "puesta en funcionamiento y avances por etapas."
+            ),
+            height=170,
+        )
+
+        componentes_decisiones = st.text_area(
+            "Componentes, tecnologías y decisiones técnicas adoptadas",
+            height=140,
+        )
+
+        resultados_entregables = st.text_area(
+            "Resultados, productos, entregables y prototipos obtenidos",
+            height=150,
+        )
+
+        pruebas_evidencias = st.text_area(
+            "Pruebas, validaciones y evidencias disponibles",
+            placeholder=(
+                "No afirmes resultados no comprobados. Indica qué se probó, "
+                "cómo se verificó y qué evidencias existen."
+            ),
+            height=150,
+        )
+
+        st.markdown("## 9. Análisis de viabilidad")
+
+        viabilidad_multidimensional = st.text_area(
+            "Viabilidad técnica, operativa, económica, normativa y de mercado",
+            height=160,
+        )
+
+        limitaciones_escalabilidad = st.text_area(
+            "Condiciones de adopción, limitaciones, sostenibilidad y escalabilidad",
+            height=140,
+        )
+
+        st.markdown(
+            "## 10. Propiedad intelectual y transferencia tecnológica"
+        )
+
+        activos_propiedad_intelectual = st.text_area(
+            "Activos generados o con potencial de protección",
+            placeholder=(
+                "Software, código fuente, diseños, modelos, prototipos, "
+                "marcas, obras, invenciones u otros resultados."
+            ),
+            height=130,
+        )
+
+        estrategia_transferencia = st.text_area(
+            "Estrategia de transferencia, adopción, comercialización o apropiación",
+            height=130,
+        )
+
+        st.markdown("## 11 y 12. Impacto y conclusiones")
+
+        impactos_beneficios = st.text_area(
+            "Beneficios e impactos tecnológicos, sociales, económicos, ambientales o productivos",
+            height=150,
+        )
+
+        beneficiarios_valor = st.text_area(
+            "Usuarios o beneficiarios y valor generado",
+            height=120,
+        )
+
+        conclusiones_futuro = st.text_area(
+            "Conclusiones, lecciones aprendidas, oportunidades de mejora, continuidad y escalamiento",
+            height=150,
+        )
+
+        st.markdown("## 13 y 14. Referencias y anexos")
+
+        referencias_suministradas = st.text_area(
+            "Referencias bibliográficas verificables",
+            placeholder=(
+                "Escribe una referencia por línea en formato APA, IEEE u otro "
+                "estilo reconocido. No se inventarán referencias."
+            ),
+            height=160,
+        )
+
+        descripcion_anexos = st.text_area(
+            "Descripción de los anexos",
+            placeholder=(
+                "Escribe un anexo por línea: fotografías, diagramas, planos, "
+                "manuales, pruebas, actas, código fuente o evidencias."
+            ),
+            height=130,
         )
 
         archivos_anexos_upload = st.file_uploader(
-            "Anexos y evidencias opcionales",
+            "Archivos de anexos y evidencias",
             type=[
                 "png",
                 "jpg",
@@ -1280,8 +1262,8 @@ def render_informe_tecnico_final(
             ],
             accept_multiple_files=True,
             help=(
-                "Las imágenes se insertan en el documento. Los demás archivos se "
-                "relacionan por nombre en la sección de anexos."
+                "Las imágenes se insertan en el documento. Los demás archivos "
+                "se relacionan por nombre en la sección de anexos."
             ),
         )
 
@@ -1289,7 +1271,7 @@ def render_informe_tecnico_final(
             (
                 "Generar contenido en modo prueba"
                 if modo_prueba
-                else "Generar Informe Final con la API de OpenAI"
+                else "Generar contenido del Informe Final con IA"
             )
         )
 
@@ -1300,24 +1282,16 @@ def render_informe_tecnico_final(
             "Código de la idea": codigo_proyecto,
             "Experto del proyecto": nombre_experto,
             "Línea tecnológica": linea_tecnologica,
-            "Descripción general del proyecto": descripcion_general_proyecto,
-            "Resultados obtenidos": resultados_obtenidos_base,
-            "Impacto del proyecto": impacto_proyecto_base,
+            "Contexto y propósito": contexto_proposito,
+            "Problema o necesidad": problema_necesidad,
+            "Objetivo general": objetivo_general_base,
+            "Objetivos específicos": objetivos_especificos_base,
+            "Metodología": metodologia_fases,
+            "Actividades de desarrollo": actividades_desarrollo,
+            "Resultados y entregables": resultados_entregables,
         }
 
         if not validar_campos_obligatorios(campos_obligatorios):
-            st.stop()
-
-        metodologias_validas = [
-            item
-            for item in metodologias_seleccionadas
-            if item != "Otra"
-        ]
-
-        if not metodologias_validas and not limpiar_texto(otra_metodologia):
-            st.error(
-                "Selecciona al menos una metodología o escribe una en el campo Otra metodología."
-            )
             st.stop()
 
         try:
@@ -1332,6 +1306,7 @@ def render_informe_tecnico_final(
         datos_base = {
             "tipo_documento": "Informe Final",
             "codigo_formato": CODIGO_FORMATO_INFORME,
+            "tipo_proyecto": limpiar_texto(tipo_proyecto),
             "clasificacion_informacion": limpiar_texto(
                 clasificacion_informacion
             ),
@@ -1345,29 +1320,75 @@ def render_informe_tecnico_final(
             "tecnoparque": limpiar_texto(tecnoparque),
             "fecha_entrega": fecha_entrega,
             "fecha_entrega_texto": fecha_entrega.strftime("%d/%m/%Y"),
-            "descripcion_general_proyecto": limpiar_texto(
-                descripcion_general_proyecto
+            "contexto_proposito": limpiar_texto(contexto_proposito),
+            "problema_necesidad": limpiar_texto(problema_necesidad),
+            "causas_consecuencias": limpiar_texto(
+                causas_consecuencias
             ),
-            "metodologias_seleccionadas": metodologias_seleccionadas,
-            "otra_metodologia": limpiar_texto(otra_metodologia),
-            "resultados_obtenidos_base": limpiar_texto(
-                resultados_obtenidos_base
+            "objetivo_general_base": limpiar_texto(
+                objetivo_general_base
             ),
-            "impacto_proyecto_base": limpiar_texto(
-                impacto_proyecto_base
+            "objetivos_especificos_base": limpiar_texto(
+                objetivos_especificos_base
+            ),
+            "referentes_estado_arte": limpiar_texto(
+                referentes_estado_arte
+            ),
+            "diferenciador_innovacion": limpiar_texto(
+                diferenciador_innovacion
+            ),
+            "metodologia_fases": limpiar_texto(metodologia_fases),
+            "proceso_validacion": limpiar_texto(proceso_validacion),
+            "actividades_desarrollo": limpiar_texto(
+                actividades_desarrollo
+            ),
+            "componentes_decisiones": limpiar_texto(
+                componentes_decisiones
+            ),
+            "resultados_entregables": limpiar_texto(
+                resultados_entregables
+            ),
+            "pruebas_evidencias": limpiar_texto(
+                pruebas_evidencias
+            ),
+            "viabilidad_multidimensional": limpiar_texto(
+                viabilidad_multidimensional
+            ),
+            "limitaciones_escalabilidad": limpiar_texto(
+                limitaciones_escalabilidad
+            ),
+            "activos_propiedad_intelectual": limpiar_texto(
+                activos_propiedad_intelectual
+            ),
+            "estrategia_transferencia": limpiar_texto(
+                estrategia_transferencia
+            ),
+            "impactos_beneficios": limpiar_texto(
+                impactos_beneficios
+            ),
+            "beneficiarios_valor": limpiar_texto(
+                beneficiarios_valor
+            ),
+            "conclusiones_futuro": limpiar_texto(
+                conclusiones_futuro
+            ),
+            "referencias_suministradas": limpiar_texto(
+                referencias_suministradas
+            ),
+            "descripcion_anexos": limpiar_texto(
+                descripcion_anexos
             ),
             "archivos_anexos": archivos_anexos,
             "modo_generacion": (
                 "Prueba local"
                 if modo_prueba
-                else "API de OpenAI"
+                else "ChatGPT API"
             ),
             "version": VERSION_INFORME_TECNICO_FINAL,
         }
 
         with st.spinner(
-            "Generando los apartados del Informe Final. Este proceso puede tardar "
-            "porque cada sección narrativa tendrá más de 400 palabras."
+            "Generando los apartados del Informe Final."
         ):
             try:
                 if modo_prueba:
@@ -1385,11 +1406,16 @@ def render_informe_tecnico_final(
 
         datos_base["contenido_informe"] = contenido
 
-        st.session_state.datos_informe_tecnico_final_generado = datos_base
-        st.session_state.ruta_docx_informe_tecnico_final_generado = None
+        st.session_state.datos_informe_tecnico_final_generado = (
+            datos_base
+        )
+        st.session_state.ruta_docx_informe_tecnico_final_generado = (
+            None
+        )
 
         st.success(
-            "Contenido generado. Revisa y edita los apartados antes de crear el Word oficial."
+            "Contenido generado. Revísalo y edítalo antes de crear "
+            "el documento oficial."
         )
 
     datos = st.session_state.get(
@@ -1401,93 +1427,96 @@ def render_informe_tecnico_final(
 
         st.markdown("## Revisión y edición del contenido")
         st.caption(
-            "Los apartados narrativos se generan con un mínimo de 400 palabras. "
-            "Guarda cualquier cambio antes de crear el archivo Word."
+            "Los cambios deben guardarse antes de generar el archivo Word."
         )
 
         with st.form("form_revisar_informe_tecnico_final"):
             introduccion_editada = st.text_area(
                 "2. Introducción",
                 value=contenido["introduccion"],
-                height=360,
+                height=220,
             )
 
             problema_editado = st.text_area(
                 "3. Planteamiento del problema",
                 value=contenido["planteamiento_problema"],
-                height=360,
+                height=220,
             )
 
             objetivo_general_editado = st.text_area(
                 "4.1 Objetivo General",
                 value=contenido["objetivo_general"],
-                height=100,
+                height=90,
             )
 
             objetivos_editados = st.text_area(
                 "4.2 Objetivos Específicos",
-                value="\n".join(contenido["objetivos_especificos"]),
-                height=170,
+                value="\n".join(
+                    contenido["objetivos_especificos"]
+                ),
+                height=150,
             )
 
             estado_arte_editado = st.text_area(
                 "5. Estado del arte y estado de la técnica",
                 value=contenido["estado_arte_tecnica"],
-                height=380,
+                height=260,
             )
 
             metodologia_editada = st.text_area(
                 "6. Metodología de desarrollo",
                 value=contenido["metodologia_desarrollo"],
-                height=380,
+                height=260,
             )
 
             desarrollo_editado = st.text_area(
                 "7. Desarrollo del proyecto",
                 value=contenido["desarrollo_proyecto"],
-                height=400,
+                height=300,
             )
 
             resultados_editados = st.text_area(
                 "8. Resultados obtenidos",
                 value=contenido["resultados_obtenidos"],
-                height=380,
+                height=240,
             )
 
             viabilidad_editada = st.text_area(
                 "9. Análisis de viabilidad",
                 value=contenido["analisis_viabilidad"],
-                height=380,
+                height=260,
             )
 
             propiedad_editada = st.text_area(
                 "10. Propiedad intelectual y transferencia tecnológica",
                 value=contenido["propiedad_transferencia"],
-                height=380,
+                height=220,
             )
 
             impacto_editado = st.text_area(
                 "11. Impacto del proyecto",
                 value=contenido["impacto_proyecto"],
-                height=380,
+                height=220,
             )
 
             conclusiones_editadas = st.text_area(
                 "12. Conclusiones",
                 value=contenido["conclusiones"],
-                height=380,
+                height=220,
             )
 
             referencias_editadas = st.text_area(
                 "13. Referencias bibliográficas",
-                value="\n".join(contenido["referencias_bibliograficas"]),
-                height=150,
+                value="\n".join(
+                    contenido["referencias_bibliograficas"]
+                ),
+                height=180,
             )
 
             anexos_editados = st.text_area(
                 "14. Anexos",
                 value="\n".join(contenido["anexos"]),
-                height=150,
+                height=160,
             )
 
             guardar_edicion = st.form_submit_button(
@@ -1496,28 +1525,54 @@ def render_informe_tecnico_final(
 
         if guardar_edicion:
             datos["contenido_informe"] = {
-                "introduccion": limpiar_texto(introduccion_editada),
-                "planteamiento_problema": limpiar_texto(problema_editado),
-                "objetivo_general": limpiar_texto(objetivo_general_editado),
-                "objetivos_especificos": dividir_lineas(objetivos_editados)[:4],
-                "estado_arte_tecnica": asegurar_nota_estado_arte(
-                    limpiar_texto(estado_arte_editado)
+                "introduccion": limpiar_texto(
+                    introduccion_editada
                 ),
-                "metodologia_desarrollo": limpiar_texto(metodologia_editada),
-                "desarrollo_proyecto": limpiar_texto(desarrollo_editado),
-                "resultados_obtenidos": limpiar_texto(resultados_editados),
-                "analisis_viabilidad": limpiar_texto(viabilidad_editada),
-                "propiedad_transferencia": limpiar_texto(propiedad_editada),
-                "impacto_proyecto": limpiar_texto(impacto_editado),
-                "conclusiones": limpiar_texto(conclusiones_editadas),
+                "planteamiento_problema": limpiar_texto(
+                    problema_editado
+                ),
+                "objetivo_general": limpiar_texto(
+                    objetivo_general_editado
+                ),
+                "objetivos_especificos": dividir_lineas(
+                    objetivos_editados
+                )[:4],
+                "estado_arte_tecnica": limpiar_texto(
+                    estado_arte_editado
+                ),
+                "metodologia_desarrollo": limpiar_texto(
+                    metodologia_editada
+                ),
+                "desarrollo_proyecto": limpiar_texto(
+                    desarrollo_editado
+                ),
+                "resultados_obtenidos": limpiar_texto(
+                    resultados_editados
+                ),
+                "analisis_viabilidad": limpiar_texto(
+                    viabilidad_editada
+                ),
+                "propiedad_transferencia": limpiar_texto(
+                    propiedad_editada
+                ),
+                "impacto_proyecto": limpiar_texto(
+                    impacto_editado
+                ),
+                "conclusiones": limpiar_texto(
+                    conclusiones_editadas
+                ),
                 "referencias_bibliograficas": dividir_lineas(
                     referencias_editadas
                 ),
                 "anexos": dividir_lineas(anexos_editados),
             }
 
-            st.session_state.datos_informe_tecnico_final_generado = datos
-            st.session_state.ruta_docx_informe_tecnico_final_generado = None
+            st.session_state.datos_informe_tecnico_final_generado = (
+                datos
+            )
+            st.session_state.ruta_docx_informe_tecnico_final_generado = (
+                None
+            )
 
             st.success("Cambios guardados correctamente.")
             st.rerun()
@@ -1542,9 +1597,15 @@ def render_informe_tecnico_final(
                 key="generar_docx_informe_tecnico_final",
             ):
                 try:
-                    ruta_docx = generar_docx_informe_tecnico_final(datos)
-                    st.session_state.ruta_docx_informe_tecnico_final_generado = ruta_docx
-                    st.success("Documento Word generado correctamente.")
+                    ruta_docx = generar_docx_informe_tecnico_final(
+                        datos
+                    )
+                    st.session_state.ruta_docx_informe_tecnico_final_generado = (
+                        ruta_docx
+                    )
+                    st.success(
+                        "Documento Word generado correctamente."
+                    )
                 except Exception as error:
                     st.error(
                         f"No se pudo generar el documento Word: {error}"
