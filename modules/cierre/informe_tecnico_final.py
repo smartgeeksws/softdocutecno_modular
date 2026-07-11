@@ -40,7 +40,7 @@ from utils.validaciones import validar_campos_obligatorios
 
 
 VERSION_INFORME_TECNICO_FINAL = (
-    "VERSION_APROBADA_TOC_WORD_ESTABLE_SIN_LIBREOFFICE"
+    "VERSION_APROBADA_DESCARGA_ESTABLE_SIN_RERUN"
 )
 CODIGO_FORMATO_INFORME = "GCDTP-F-023 V01"
 NOMBRE_PLANTILLA_INFORME = "GCDTP-F-023_V01_Formato_Informe_Final.docx"
@@ -2499,22 +2499,26 @@ def render_informe_tecnico_final(
         ]
         st.dataframe(
             tabla_resultados,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
         col_json, col_docx = st.columns(2)
 
         with col_json:
+            datos_json_descarga = json.dumps(
+                serializar_datos_informe(datos),
+                ensure_ascii=False,
+                indent=4,
+            ).encode("utf-8")
+
             st.download_button(
                 label="Descargar datos en JSON",
-                data=json.dumps(
-                    serializar_datos_informe(datos),
-                    ensure_ascii=False,
-                    indent=4,
-                ),
+                data=datos_json_descarga,
                 file_name="datos_informe_tecnico_final.json",
                 mime="application/json",
+                on_click="ignore",
+                key="descargar_datos_informe_tecnico_final",
             )
 
         with col_docx:
@@ -2538,13 +2542,21 @@ def render_informe_tecnico_final(
         ruta_docx = st.session_state.get(ruta_key)
 
         if ruta_docx and Path(ruta_docx).exists():
-            with open(ruta_docx, "rb") as archivo_docx:
+            try:
+                contenido_docx = Path(ruta_docx).read_bytes()
+            except OSError as error:
+                st.error(
+                    f"No se pudo preparar el archivo para descarga: {error}"
+                )
+            else:
                 st.download_button(
                     label="⬇️ Descargar Informe Final oficial",
-                    data=archivo_docx,
+                    data=contenido_docx,
                     file_name=Path(ruta_docx).name,
                     mime=(
                         "application/vnd.openxmlformats-"
                         "officedocument.wordprocessingml.document"
                     ),
+                    on_click="ignore",
+                    key="descargar_informe_final_oficial",
                 )
