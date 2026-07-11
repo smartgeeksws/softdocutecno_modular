@@ -40,7 +40,7 @@ from utils.validaciones import validar_campos_obligatorios
 
 
 VERSION_INFORME_TECNICO_FINAL = (
-    "VERSION_APROBADA_DESARROLLO_METODOLOGIAS_ACTIVIDADES_450"
+    "VERSION_APROBADA_METODOLOGIA_FASES_DESARROLLO_POR_ACTIVIDAD"
 )
 CODIGO_FORMATO_INFORME = "GCDTP-F-023 V01"
 NOMBRE_PLANTILLA_INFORME = "GCDTP-F-023_V01_Formato_Informe_Final.docx"
@@ -93,6 +93,7 @@ CLAVES_CONTENIDO = [
     "actividades_corregidas",
     "entregables_corregidos",
     "desarrollo_proyecto",
+    "desarrollo_actividades",
     "resultados_obtenidos",
     "analisis_viabilidad",
     "propiedad_transferencia",
@@ -644,6 +645,74 @@ def configurar_estilos_y_tabla_contenido(documento: Document) -> None:
     marcar_actualizacion_campos(documento)
 
 
+def insertar_desarrollo_actividades(
+    parrafo_ancla: Paragraph,
+    actividades: list[dict],
+) -> None:
+    """Inserta una subsección por actividad y deja espacio para evidencias."""
+    cursor = parrafo_ancla
+
+    for numero, actividad in enumerate(actividades, start=1):
+        titulo = limpiar_frases_meta(str(actividad.get("titulo", "")))
+        fase = limpiar_frases_meta(
+            str(actividad.get("fase_metodologica", ""))
+        )
+        descripcion = limpiar_frases_meta(
+            str(actividad.get("descripcion_tecnica", ""))
+        )
+
+        cursor = insertar_parrafo_despues(cursor)
+        escribir_parrafo(
+            cursor,
+            f"Actividad {numero}. {titulo or f'Actividad técnica {numero}'}",
+            tamano=11,
+            negrita=True,
+            alineacion=WD_ALIGN_PARAGRAPH.LEFT,
+        )
+        cursor.paragraph_format.space_before = Pt(8)
+        cursor.paragraph_format.space_after = Pt(4)
+
+        cursor = insertar_parrafo_despues(cursor)
+        escribir_parrafo(
+            cursor,
+            f"Fase metodológica relacionada: {fase}",
+            tamano=10.5,
+            negrita=True,
+            alineacion=WD_ALIGN_PARAGRAPH.LEFT,
+        )
+        cursor.paragraph_format.space_after = Pt(4)
+
+        cursor = insertar_parrafo_despues(cursor)
+        escribir_parrafo(
+            cursor,
+            descripcion,
+            tamano=11,
+            alineacion=WD_ALIGN_PARAGRAPH.JUSTIFY,
+        )
+        cursor.paragraph_format.space_after = Pt(5)
+
+        cursor = insertar_parrafo_despues(cursor)
+        escribir_parrafo(
+            cursor,
+            "Evidencia de la actividad:",
+            tamano=11,
+            negrita=True,
+            alineacion=WD_ALIGN_PARAGRAPH.LEFT,
+        )
+
+        cursor = insertar_parrafo_despues(cursor)
+        escribir_parrafo(
+            cursor,
+            (
+                "[Insertar fotografías, capturas de pantalla, enlaces o soportes "
+                "correspondientes a esta actividad]"
+            ),
+            tamano=10.5,
+            alineacion=WD_ALIGN_PARAGRAPH.LEFT,
+        )
+        cursor.paragraph_format.space_after = Pt(18)
+
+
 def insertar_tabla_resultados(
     documento: Document,
     parrafo_ancla: Paragraph,
@@ -846,6 +915,220 @@ def metodologias_en_texto(datos: dict) -> str:
         datos.get("metodologia_inferida", "")
     )
     return metodologia_respaldo or inferir_metodologia_base(datos)
+
+
+def fases_metodologia(nombre: str) -> str:
+    """Devuelve las etapas estándar de una metodología seleccionada."""
+    clave = limpiar_texto(nombre).casefold()
+
+    catalogo = {
+        "metodologías ágiles": (
+            "priorización de requerimientos, planificación iterativa, ejecución "
+            "en ciclos cortos, revisión de avances, retroalimentación y mejora continua"
+        ),
+        "scrum": (
+            "definición y priorización del Product Backlog, planificación del Sprint, "
+            "ejecución iterativa, seguimiento diario, Sprint Review y retrospectiva"
+        ),
+        "kanban": (
+            "visualización del flujo de trabajo, limitación del trabajo en curso, "
+            "gestión del flujo, seguimiento de indicadores y mejora continua"
+        ),
+        "modelo en cascada": (
+            "levantamiento y análisis de requisitos, diseño, implementación, pruebas, "
+            "despliegue y mantenimiento"
+        ),
+        "modelo espiral": (
+            "definición de objetivos, análisis de riesgos, desarrollo o prototipado, "
+            "evaluación de resultados y planificación del siguiente ciclo"
+        ),
+        "design thinking": "empatizar, definir, idear, prototipar y evaluar",
+        "doble diamante": "descubrir, definir, desarrollar y entregar",
+        "diseño centrado en el usuario (dcu)": (
+            "comprensión del contexto de uso, especificación de requerimientos, "
+            "diseño de soluciones, evaluación con usuarios e iteración"
+        ),
+        "diseño para manufactura y ensamble (dfma)": (
+            "definición de requerimientos, simplificación del diseño, análisis de "
+            "manufacturabilidad, análisis de ensamblaje y validación del producto"
+        ),
+        "lean startup": (
+            "formular hipótesis, construir el producto mínimo viable, medir resultados, "
+            "aprender de la evidencia y decidir entre perseverar o ajustar"
+        ),
+        "stage-gate": (
+            "descubrimiento, definición de alcance, formulación del caso, desarrollo, "
+            "pruebas, validación y decisión de avance mediante puntos de control"
+        ),
+        "desarrollo iterativo de prototipos": (
+            "definición de requerimientos, construcción del prototipo, prueba, "
+            "retroalimentación, ajuste y nueva iteración"
+        ),
+        "ingeniería de sistemas y modelo v": (
+            "requisitos, diseño del sistema, diseño detallado, implementación, "
+            "verificación unitaria, integración, validación del sistema y aceptación"
+        ),
+        "crisp-dm para proyectos de datos e inteligencia artificial": (
+            "comprensión del negocio, comprensión de los datos, preparación de datos, "
+            "modelado, evaluación y despliegue"
+        ),
+        "dmaic / six sigma": "definir, medir, analizar, mejorar y controlar",
+        "investigación aplicada y validación experimental": (
+            "formulación del problema, diseño metodológico, experimentación, análisis "
+            "de resultados, validación y documentación"
+        ),
+        "triz para solución inventiva de problemas": (
+            "definición del problema, identificación de contradicciones, selección de "
+            "principios inventivos, formulación de alternativas y evaluación técnica"
+        ),
+    }
+
+    return catalogo.get(
+        clave,
+        (
+            "definición del alcance, planeación, ejecución, seguimiento, "
+            "validación y cierre conforme al enfoque seleccionado"
+        ),
+    )
+
+
+def fases_metodologias_en_texto(datos: dict) -> str:
+    """Presenta cada metodología seleccionada con sus fases de referencia."""
+    seleccionadas = datos.get("metodologias_seleccionadas", []) or []
+    otra = limpiar_texto(datos.get("otra_metodologia", ""))
+
+    metodologias = [
+        limpiar_texto(str(item))
+        for item in seleccionadas
+        if limpiar_texto(str(item)) and str(item) != "Otra"
+    ]
+
+    if otra:
+        metodologias.append(otra)
+
+    if not metodologias:
+        metodologias = [metodologias_en_texto(datos)]
+
+    return "\n".join(
+        f"- {metodologia}: {fases_metodologia(metodologia)}."
+        for metodologia in metodologias
+    )
+
+
+def limpiar_frases_meta(texto: str) -> str:
+    """Elimina explicaciones sobre el proceso de generación o corrección."""
+    contenido = limpiar_texto(texto)
+    if not contenido:
+        return ""
+
+    frases_prohibidas = (
+        "fueron previamente corregid",
+        "previamente corregid",
+        "sin copiar literalmente",
+        "no se copiaron",
+        "texto ingresado",
+        "texto diligenciado",
+        "generado por inteligencia artificial",
+        "generado por ia",
+        "prompt",
+        "antes de ser incorporad",
+        "en lugar de reproducir",
+        "reformuladas antes de",
+    )
+
+    oraciones = re.split(r"(?<=[.!?])\s+", contenido)
+    conservadas = [
+        oracion.strip()
+        for oracion in oraciones
+        if oracion.strip()
+        and not any(frase in oracion.casefold() for frase in frases_prohibidas)
+    ]
+    return limpiar_texto(" ".join(conservadas))
+
+
+def metodologia_modo_prueba(datos: dict) -> str:
+    metodologias = metodologias_en_texto(datos)
+    fases = fases_metodologias_en_texto(datos).replace("\n", " ")
+    return (
+        f"El proyecto se desarrolló mediante {metodologias}. La aplicación del "
+        f"enfoque consideró las siguientes fases de referencia: {fases} Estas "
+        "etapas permitieron ordenar el trabajo desde la comprensión de la necesidad "
+        "y la definición de requerimientos hasta el diseño, la implementación, la "
+        "revisión y la validación de la solución. Cuando se emplearon varios enfoques, "
+        "su integración se realizó de manera complementaria, asignando a cada uno una "
+        "función concreta dentro del proceso. Las metodologías orientadas al usuario "
+        "aportaron criterios para comprender el contexto, definir necesidades y revisar "
+        "la pertinencia de las decisiones. Los enfoques iterativos facilitaron la "
+        "priorización, el seguimiento de avances y la incorporación progresiva de "
+        "ajustes. Los modelos de ingeniería permitieron mantener trazabilidad entre "
+        "requerimientos, diseño, construcción y verificación."
+    )
+
+
+def desarrollo_actividades_modo_prueba(
+    datos: dict,
+    actividades_corregidas: list[str],
+) -> list[dict]:
+    metodologia = metodologias_en_texto(datos)
+    resultado: list[dict] = []
+    for indice, actividad in enumerate(actividades_corregidas, start=1):
+        titulo = limpiar_texto(actividad).rstrip(".")
+        resultado.append(
+            {
+                "titulo": titulo or f"Actividad técnica {indice}",
+                "fase_metodologica": metodologia,
+                "descripcion_tecnica": (
+                    f"La actividad se ejecutó en correspondencia con {metodologia}, "
+                    "aplicando procedimientos y decisiones vinculados con el alcance "
+                    "técnico definido. Su desarrollo mantuvo relación con los objetivos, "
+                    "los componentes de la solución y la secuencia metodológica del "
+                    "proyecto. La revisión de avances permitió identificar condiciones "
+                    "de implementación, necesidades de integración y aspectos sujetos a "
+                    "ajuste, sin atribuir resultados no documentados."
+                ),
+                "evidencia": (
+                    "Insertar fotografías, capturas de pantalla, enlaces o soportes "
+                    "correspondientes a esta actividad."
+                ),
+            }
+        )
+    return resultado
+
+
+def normalizar_desarrollo_actividades(
+    valor: object,
+    actividades_corregidas: list[str],
+    datos: dict,
+) -> list[dict]:
+    elementos = valor if isinstance(valor, list) else []
+    respaldo = desarrollo_actividades_modo_prueba(datos, actividades_corregidas)
+    resultado: list[dict] = []
+
+    for indice in range(len(actividades_corregidas)):
+        item = elementos[indice] if indice < len(elementos) else {}
+        if not isinstance(item, dict):
+            item = {}
+        base = respaldo[indice]
+
+        resultado.append(
+            {
+                "titulo": limpiar_frases_meta(str(item.get("titulo", "")))
+                or base["titulo"],
+                "fase_metodologica": limpiar_frases_meta(
+                    str(item.get("fase_metodologica", ""))
+                )
+                or base["fase_metodologica"],
+                "descripcion_tecnica": limpiar_frases_meta(
+                    str(item.get("descripcion_tecnica", ""))
+                )
+                or base["descripcion_tecnica"],
+                "evidencia": (
+                    "Insertar fotografías, capturas de pantalla, enlaces o soportes "
+                    "correspondientes a esta actividad."
+                ),
+            }
+        )
+    return resultado
 
 
 def actividades_en_texto(actividades: list[str]) -> str:
@@ -1514,8 +1797,8 @@ def ajustar_rango_palabras(
     resultado = limpiar_texto(texto)
 
     if clave == "desarrollo_proyecto":
-        minimo = 450
-        maximo = 520
+        minimo = 120
+        maximo = 190
 
     for fragmento in [
         _complemento_apartado(clave, datos),
@@ -1744,48 +2027,21 @@ def contenido_modo_prueba(datos: dict) -> dict:
             "aplicación frente a alternativas existentes, sin afirmar equivalencias ni "
             "atribuir ventajas que no hayan sido verificadas."
         ),
-        "metodologia_desarrollo": (
-            f"A partir de la naturaleza de la solución y de las actividades reportadas, "
-            f"se infiere la aplicación de {metodologia}. El enfoque organiza el proceso "
-            "en momentos de comprensión de la necesidad, definición de requerimientos, "
-            "diseño, implementación, revisión y ajuste. La metodología se articula con "
-            "las actividades ejecutadas y permite explicar la secuencia real del trabajo "
-            "sin exigir al usuario una selección metodológica adicional."
-        ),
+        "metodologia_desarrollo": metodologia_modo_prueba(datos),
         "actividades_corregidas": actividades_corregidas,
         "entregables_corregidos": entregables_corregidos,
         "desarrollo_proyecto": (
-            f"El desarrollo del proyecto se estructuró mediante la integración de "
-            f"{metodologia}, utilizando sus principios para organizar una secuencia "
-            "coherente de análisis, definición, diseño, implementación, integración, "
-            "revisión y ajuste. Las actividades suministradas fueron previamente "
-            "corregidas en ortografía, redacción y precisión técnica antes de ser "
-            "incorporadas al relato. En lugar de reproducirlas como una lista, el "
-            "apartado explica su relación funcional dentro del proceso, identifica las "
-            "decisiones que orientaron cada etapa y muestra cómo contribuyeron a la "
-            "consolidación progresiva de la solución. La metodología permitió ordenar "
-            "los requerimientos, priorizar acciones, revisar avances y establecer "
-            "criterios para efectuar ajustes. Las actividades de comprensión y análisis "
-            "sirvieron para delimitar la necesidad, reconocer restricciones y definir "
-            "las condiciones que debía atender la propuesta. Posteriormente, las tareas "
-            "de diseño permitieron traducir esas necesidades en componentes, estructuras "
-            "o especificaciones técnicas. Durante la construcción se desarrollaron e "
-            "integraron los elementos necesarios, manteniendo correspondencia con los "
-            "objetivos y con el alcance previsto. Las acciones de revisión facilitaron "
-            "la identificación de inconsistencias, oportunidades de mejora y ajustes "
-            "requeridos antes de consolidar los productos finales. La combinación de "
-            "metodologías aportó una lógica de trabajo complementaria: los enfoques "
-            "centrados en el usuario fortalecieron la comprensión de necesidades; los "
-            "esquemas iterativos facilitaron ajustes progresivos; y los modelos de "
-            "ingeniería aportaron trazabilidad entre requerimientos, construcción y "
-            "verificación. Esta articulación permitió que las actividades no se "
-            "ejecutaran como acciones aisladas, sino como partes de un proceso técnico "
-            "relacionado. El relato conserva el orden lógico del trabajo, explica la "
-            "contribución de cada fase y diferencia claramente las actividades de los "
-            "entregables obtenidos. De esta manera, el desarrollo documenta la evolución "
-            "real del proyecto, presenta las decisiones más relevantes y establece una "
-            "base comprensible para revisar los resultados, la viabilidad y la "
-            "continuidad tecnológica."
+            f"El desarrollo del proyecto se organizó mediante "
+            f"{metodologias_en_texto(datos)}, articulando sus fases con las acciones "
+            "ejecutadas durante el proceso. Cada actividad se presenta de manera "
+            "independiente, con su relación metodológica, descripción técnica y espacio "
+            "destinado a incorporar las evidencias correspondientes. Esta estructura "
+            "permite documentar la secuencia real del trabajo y facilitar la inclusión "
+            "posterior de fotografías, capturas de pantalla, enlaces y demás soportes."
+        ),
+        "desarrollo_actividades": desarrollo_actividades_modo_prueba(
+            datos,
+            actividades_corregidas,
         ),
         "resultados_obtenidos": resultados_modo_prueba_sin_copia(
             datos,
@@ -1853,6 +2109,18 @@ def normalizar_contenido(
     for clave in CLAVES_CONTENIDO:
         valor = contenido.get(clave)
 
+        if clave == "desarrollo_actividades":
+            actividades_base = resultado.get(
+                "actividades_corregidas",
+                respaldo.get("actividades_corregidas", []),
+            )
+            resultado[clave] = normalizar_desarrollo_actividades(
+                valor,
+                actividades_base,
+                datos,
+            )
+            continue
+
         if clave in {
             "objetivos_especificos",
             "actividades_corregidas",
@@ -1878,6 +2146,8 @@ def normalizar_contenido(
             resultado[clave] = valor
         else:
             texto_valor = limpiar_texto(str(valor or ""))
+            if clave in {"metodologia_desarrollo", "desarrollo_proyecto"}:
+                texto_valor = limpiar_frases_meta(texto_valor)
             resultado[clave] = texto_valor or respaldo[clave]
 
     resultado["objetivos_especificos"] = (
@@ -2153,8 +2423,11 @@ ACTIVIDADES EJECUTADAS
 IMPACTO DEL PROYECTO
 {datos.get('impacto_proyecto_base', '')}
 
-METODOLOGÍA SELECCIONADA
+METODOLOGÍAS SELECCIONADAS
 {metodologia}
+
+FASES DE REFERENCIA DE LAS METODOLOGÍAS
+{fases_metodologias_en_texto(datos)}
 
 DOS REFERENTES REALES VERIFICADOS PARA EL ESTADO DEL ARTE
 {json.dumps(referentes, ensure_ascii=False, indent=2)}
@@ -2174,11 +2447,15 @@ REQUISITOS ESPECÍFICOS
   referentes reales con sus citas cortas. Explica el aporte innovador y finaliza
   indicando que el Estado del Arte completo está en los documentos de
   planeación, específicamente en el documento Estado del Arte.
-- Metodología: determina automáticamente el enfoque estandarizado más coherente
-  a partir de la naturaleza del proyecto y las actividades. Puedes emplear
-  Design Thinking, DCU, Doble Diamante, metodologías ágiles, Scrum, Kanban,
-  CRISP-DM, modelo V, DFMA, desarrollo iterativo de prototipos, DMAIC o
-  investigación aplicada, pero menciona solo la combinación pertinente.
+- Metodología: utiliza exactamente las metodologías seleccionadas por el usuario.
+  Describe técnicamente cada metodología, sus fases, etapas, principios, artefactos o
+  ciclos, según corresponda. Para Design Thinking desarrolla empatizar, definir,
+  idear, prototipar y evaluar; para modelo en cascada desarrolla requisitos, diseño,
+  implementación, pruebas, despliegue y mantenimiento; y aplica el mismo criterio
+  técnico a las demás metodologías. Cuando exista más de una, explica cómo se
+  complementan dentro del proyecto. No menciones metodologías no seleccionadas y no
+  incluyas instrucciones sobre corrección, generación del texto o uso de inteligencia
+  artificial.
 - Actividades corregidas: conserva exactamente la cantidad y el sentido de las
   actividades suministradas, pero nunca copies literalmente su redacción. Corrige
   ortografía, gramática, puntuación y concordancia; reformula cada actividad con
@@ -2254,43 +2531,43 @@ ENTREGABLES CORREGIDOS Y MEJORADOS TÉCNICAMENTE
 IMPACTO DEL PROYECTO
 {datos.get('impacto_proyecto_base', '')}
 
-METODOLOGÍA DETERMINADA
+METODOLOGÍAS SELECCIONADAS
 {metodologia}
+
+FASES DE REFERENCIA
+{fases_metodologias_en_texto(datos)}
 """
 
     instrucciones_bloque_2 = reglas_comunes + """
 Genera los apartados 7, 8, 9, 10, 11 y 12.
 
 REQUISITOS ESPECÍFICOS
-- Desarrollo: redacta un texto continuo de 450 a 520 palabras que integre todas
-  las metodologías seleccionadas por el usuario y las actividades corregidas. Explica
-  cómo los principios, etapas o prácticas de cada metodología se relacionaron con las
-  acciones desarrolladas y con la evolución técnica de la solución. No copies, enumeres
-  ni reproduzcas literalmente las actividades originales ni las actividades corregidas.
-  Reformula siempre su contenido dentro de una narración técnica, coherente y cronológica.
-  Corrige ortografía, gramática, puntuación y redacción; aplica mejora técnica cuando sea
-  necesaria para precisar procesos, decisiones, componentes, integraciones, pruebas o
-  ajustes, pero no inventes información. No repitas la introducción, los resultados ni
-  los entregables.
+- Desarrollo del proyecto: genera una introducción técnica breve y una entrada
+  independiente por cada actividad corregida, conservando exactamente la cantidad y
+  el orden de las actividades. Para cada actividad crea un título técnico, identifica
+  la fase o fases metodológicas relacionadas y redacta una descripción técnica de
+  130 a 220 palabras sobre su ejecución, propósito, procedimiento, decisiones,
+  componentes, integraciones, revisiones o ajustes.
+- Relaciona cada actividad con las fases reales de las metodologías seleccionadas.
+  No asignes fases de metodologías que no fueron elegidas.
+- No copies literalmente las actividades originales ni las corregidas. Utilízalas
+  como insumo y reformula su contenido con lenguaje técnico, ortografía, gramática y
+  precisión mejoradas, sin inventar tecnologías, resultados, pruebas, cantidades o
+  validaciones.
+- No agrupes varias actividades en una sola entrada y no omitas ninguna.
+- No incluyas frases sobre el proceso de redacción, corrección, generación, prompt,
+  inteligencia artificial o instrucciones recibidas. Presenta únicamente el contenido
+  técnico final del proyecto.
 - Resultados: utiliza exclusivamente los entregables corregidos como fuente
   conceptual y explica su relación con objetivos, actividades, innovación y TRL.
-  Corrige y mejora completamente la redacción del apartado. No copies, enumeres
-  ni reproduzcas literalmente los textos ingresados en Entregables obtenidos.
-  El cuerpo debe ser analítico y redactado con palabras propias; la identificación
-  detallada de cada entregable aparecerá únicamente en la tabla independiente.
+  No copies, enumeres ni reproduzcas literalmente los entregables.
 - Viabilidad: analiza solo los aspectos técnicos, operativos, económicos,
   normativos, de adopción, sostenibilidad y escalabilidad pertinentes.
-- Propiedad intelectual y transferencia: determina automáticamente los
-  mecanismos realmente pertinentes en Colombia mediante el análisis de la
-  descripción, objetivos, innovación, actividades y entregables. Limítate a
-  registro de software, derecho de autor, modelo de utilidad, patente de
-  invención, diseño industrial, secreto empresarial o registro de marca. No
-  afirmes que exista un derecho concedido.
-- Impacto: desarrolla el impacto suministrado y solo las dimensiones aplicables,
-  sin repetir resultados ni introducción.
+- Propiedad intelectual y transferencia: determina automáticamente los mecanismos
+  realmente pertinentes en Colombia. No afirmes que exista un derecho concedido.
+- Impacto: desarrolla el impacto suministrado y solo las dimensiones aplicables.
 - Conclusiones: integra pertinencia, entregables, innovación, limitaciones y
-  aprendizajes. Incluye exactamente la recomendación TRL suministrada y no
-  afirmes que el nivel siguiente ya fue alcanzado.
+  aprendizajes. Incluye exactamente la recomendación TRL suministrada.
 """
 
     entrada_bloque_2 = contexto_bloque_2 + f"""
@@ -2300,7 +2577,15 @@ RECOMENDACIÓN OBLIGATORIA DE CONTINUIDAD TRL
 
 ESTRUCTURA JSON OBLIGATORIA
 {{
-  "desarrollo_proyecto": "450 a 520 palabras",
+  "desarrollo_proyecto": "introducción técnica de 120 a 190 palabras",
+  "desarrollo_actividades": [
+    {{
+      "titulo": "nombre técnico corregido de la actividad",
+      "fase_metodologica": "fase o fases y metodología relacionada",
+      "descripcion_tecnica": "130 a 220 palabras sobre la ejecución técnica",
+      "evidencia": "Insertar fotografías, capturas de pantalla, enlaces o soportes correspondientes a esta actividad."
+    }}
+  ],
   "resultados_obtenidos": "300 a 340 palabras",
   "analisis_viabilidad": "300 a 340 palabras",
   "propiedad_transferencia": "300 a 340 palabras",
@@ -2324,29 +2609,13 @@ ESTRUCTURA JSON OBLIGATORIA
 
     contenido["actividades_corregidas"] = actividades_corregidas
     contenido["entregables_corregidos"] = entregables_corregidos
-    desarrollo_generado = limpiar_texto(
-        str(contenido.get("desarrollo_proyecto", ""))
-    )
-    fuentes_actividades = (
-        actividades_originales + actividades_corregidas
-    )
-
-    if (
-        contiene_copia_textual(
-            desarrollo_generado,
-            fuentes_actividades,
+    contenido["desarrollo_actividades"] = (
+        normalizar_desarrollo_actividades(
+            contenido.get("desarrollo_actividades", []),
+            actividades_corregidas,
+            datos,
         )
-        or len(desarrollo_generado.split()) < 450
-    ):
-        contenido["desarrollo_proyecto"] = (
-            reescribir_desarrollo_sin_copia_literal(
-                texto_desarrollo=desarrollo_generado,
-                actividades_corregidas=actividades_corregidas,
-                actividades_originales=actividades_originales,
-                datos=datos,
-                modelo_openai=modelo_openai,
-            )
-        )
+    )
 
     resultados_generados = limpiar_texto(
         str(contenido.get("resultados_obtenidos", ""))
@@ -2376,32 +2645,6 @@ ESTRUCTURA JSON OBLIGATORIA
         respaldo,
         datos,
     )
-
-    desarrollo_final = contenido_normalizado["desarrollo_proyecto"]
-    fuentes_actividades = (
-        actividades_originales
-        + contenido_normalizado.get("actividades_corregidas", [])
-    )
-
-    if (
-        contiene_copia_textual(
-            desarrollo_final,
-            fuentes_actividades,
-        )
-        or len(desarrollo_final.split()) < 450
-    ):
-        contenido_normalizado["desarrollo_proyecto"] = (
-            reescribir_desarrollo_sin_copia_literal(
-                texto_desarrollo=desarrollo_final,
-                actividades_corregidas=contenido_normalizado.get(
-                    "actividades_corregidas",
-                    [],
-                ),
-                actividades_originales=actividades_originales,
-                datos=datos,
-                modelo_openai=modelo_openai,
-            )
-        )
 
     return contenido_normalizado
 
@@ -2509,6 +2752,11 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
             alineacion=WD_ALIGN_PARAGRAPH.JUSTIFY,
         )
         destinos[titulo] = destino
+
+    insertar_desarrollo_actividades(
+        destinos["7. Desarrollo del proyecto"],
+        contenido["desarrollo_actividades"],
+    )
 
     encabezado_objetivos_especificos = buscar_parrafo(
         documento,
@@ -2951,9 +3199,9 @@ def render_informe_tecnico_final(
             len(contenido.get("entregables_corregidos", [])),
         )
         st.caption(
-            "El desarrollo del proyecto fue redactado con una extensión de 450 a "
-            "520 palabras, integrando todas las metodologías seleccionadas con las "
-            "actividades previamente corregidas, reformuladas y mejoradas técnicamente."
+            "El desarrollo del proyecto presenta cada actividad por separado, "
+            "relacionada con las fases de las metodologías seleccionadas y con un "
+            "espacio para incorporar evidencias en el documento Word."
         )
 
         st.markdown("### Vista previa de la tabla de resultados")
