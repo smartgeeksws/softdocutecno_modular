@@ -2096,11 +2096,10 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
     plantilla = obtener_ruta_plantilla()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    nombre_archivo = (
-        f"Informe_Final_"
-        f"{safe_filename(datos.get('codigo_proyecto', 'proyecto'))}_"
-        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+    codigo_archivo = safe_filename(
+        datos.get("codigo_proyecto", "proyecto")
     )
+    nombre_archivo = f"Informe Final {codigo_archivo}.docx"
     ruta_salida = OUTPUT_DIR / nombre_archivo
 
     documento = Document(str(plantilla))
@@ -2242,7 +2241,7 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
     )
 
     documento.core_properties.title = (
-        f"Informe Final - {datos.get('nombre_proyecto', '')}"
+        f"Informe Final {datos.get('codigo_proyecto', '')}"
     )
     documento.core_properties.subject = CODIGO_FORMATO_INFORME
     documento.core_properties.keywords = (
