@@ -1,5 +1,4 @@
-streamlit
+﻿streamlit
 openai
 reportlab
 python-docx
-pypdf>=5.9,<7

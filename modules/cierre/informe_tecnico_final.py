@@ -40,7 +40,7 @@ from utils.validaciones import validar_campos_obligatorios
 
 
 VERSION_INFORME_TECNICO_FINAL = (
-    "VERSION_APROBADA_TOC_PDF_SEGURO"
+    "VERSION_APROBADA_TOC_WORD_ESTABLE_SIN_LIBREOFFICE"
 )
 CODIGO_FORMATO_INFORME = "GCDTP-F-023 V01"
 NOMBRE_PLANTILLA_INFORME = "GCDTP-F-023_V01_Formato_Informe_Final.docx"
@@ -1960,264 +1960,16 @@ ESTRUCTURA JSON OBLIGATORIA
 # GENERACIÓN DEL DOCUMENTO OFICIAL
 # =====================================================
 
-def actualizar_toc_con_libreoffice(ruta_docx: Path) -> bool:
+def preparar_toc_para_word(documento: Document) -> None:
     """
-    Calcula la paginación real sin utilizar UNO ni cargar librerías nativas
-    dentro del proceso de Streamlit.
+    Deja la tabla de contenido configurada para que Microsoft Word recalcule
+    automáticamente los números de página al abrir el archivo.
 
-    El flujo es el siguiente:
-    1. LibreOffice convierte una copia del DOCX a PDF en un proceso externo.
-    2. pypdf identifica la página real de cada título.
-    3. Se actualizan únicamente los números visibles de la tabla de contenido
-       dentro del DOCX, conservando estilos, hipervínculos y campos de Word.
-
-    Si la actualización falla, el DOCX ya generado se conserva y Word puede
-    recalcular el índice al abrirlo porque los campos permanecen marcados como
-    pendientes de actualización.
+    No ejecuta LibreOffice, UNO, conversiones a PDF ni procesos externos.
+    Esto evita los cierres nativos de Streamlit Cloud.
     """
-
-    def normalizar_busqueda(valor: str) -> str:
-        texto = unicodedata.normalize("NFKD", str(valor or ""))
-        texto = "".join(
-            caracter
-            for caracter in texto
-            if not unicodedata.combining(caracter)
-        )
-        texto = texto.casefold()
-        texto = re.sub(r"\s+", " ", texto)
-        return texto.strip()
-
-    ejecutable = shutil.which("libreoffice") or shutil.which("soffice")
-
-    if not ejecutable or not ruta_docx.exists():
-        return False
-
-    try:
-        from pypdf import PdfReader
-    except ImportError:
-        return False
-
-    titulos_toc = [
-        "1. Información general del proyecto",
-        "2. Introducción",
-        "3. Planteamiento del problema",
-        "4. Objetivos",
-        "4.1 Objetivo General",
-        "4.2 Objetivos Específicos",
-        "5. Estado del arte y estado de la técnica",
-        "6. Metodología de desarrollo",
-        "7. Desarrollo del proyecto",
-        "8. Resultados obtenidos",
-        "9. Análisis de viabilidad",
-        "10. Propiedad intelectual y transferencia tecnológica",
-        "11. Impacto del proyecto",
-        "12. Conclusiones",
-        "13. Referencias bibliográficas",
-        "14. Anexos",
-    ]
-
-    carpeta_temporal = Path(
-        tempfile.mkdtemp(prefix="softdocutecno_toc_pdf_")
-    )
-
-    try:
-        perfil = carpeta_temporal / "perfil_libreoffice"
-        perfil.mkdir(parents=True, exist_ok=True)
-
-        entorno = os.environ.copy()
-        entorno.update(
-            {
-                "HOME": str(carpeta_temporal),
-                "TMPDIR": str(carpeta_temporal),
-                "SAL_USE_VCLPLUGIN": "svp",
-                "QT_QPA_PLATFORM": "offscreen",
-                "OMP_NUM_THREADS": "1",
-                "MALLOC_ARENA_MAX": "2",
-            }
-        )
-
-        comando = [
-            ejecutable,
-            "--headless",
-            "--nologo",
-            "--nodefault",
-            "--nofirststartwizard",
-            "--norestore",
-            "--nolockcheck",
-            (
-                "-env:UserInstallation="
-                f"file://{perfil.as_posix()}"
-            ),
-            "--convert-to",
-            "pdf:writer_pdf_Export",
-            "--outdir",
-            str(carpeta_temporal),
-            str(ruta_docx),
-        ]
-
-        resultado = subprocess.run(
-            comando,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=entorno,
-            timeout=90,
-            check=False,
-        )
-
-        ruta_pdf = carpeta_temporal / f"{ruta_docx.stem}.pdf"
-
-        if resultado.returncode != 0 or not ruta_pdf.exists():
-            return False
-
-        lector = PdfReader(str(ruta_pdf))
-        paginas: list[tuple[int, list[str]]] = []
-
-        for numero_pagina, pagina in enumerate(lector.pages, start=1):
-            texto_pagina = pagina.extract_text() or ""
-            lineas = [
-                normalizar_busqueda(linea)
-                for linea in texto_pagina.splitlines()
-                if normalizar_busqueda(linea)
-            ]
-            paginas.append((numero_pagina, lineas))
-
-        pagina_indice = 0
-
-        for numero_pagina, lineas in paginas[:4]:
-            if any(
-                "tabla de contenido" in linea
-                for linea in lineas
-            ):
-                pagina_indice = numero_pagina
-
-        paginas_titulos: dict[str, int] = {}
-
-        for titulo in titulos_toc:
-            titulo_normalizado = normalizar_busqueda(titulo)
-
-            for numero_pagina, lineas in paginas:
-                if numero_pagina <= pagina_indice:
-                    continue
-
-                encontrado = any(
-                    linea == titulo_normalizado
-                    or linea.startswith(f"{titulo_normalizado} ")
-                    for linea in lineas
-                )
-
-                if encontrado:
-                    paginas_titulos[titulo] = numero_pagina
-                    break
-
-        if len(paginas_titulos) < 10:
-            return False
-
-        with ZipFile(ruta_docx, "r") as archivo_entrada:
-            contenido_zip = {
-                nombre: archivo_entrada.read(nombre)
-                for nombre in archivo_entrada.namelist()
-            }
-
-        documento_xml = etree.fromstring(
-            contenido_zip["word/document.xml"]
-        )
-        espacios = {
-            "w": (
-                "http://schemas.openxmlformats.org/"
-                "wordprocessingml/2006/main"
-            )
-        }
-        parrafos = documento_xml.xpath(
-            ".//w:p",
-            namespaces=espacios,
-        )
-
-        indice_parrafo_toc = None
-
-        for indice, parrafo in enumerate(parrafos):
-            texto_parrafo = "".join(
-                parrafo.xpath(
-                    ".//w:t/text()",
-                    namespaces=espacios,
-                )
-            )
-
-            if normalizar_busqueda(texto_parrafo) == "tabla de contenido":
-                indice_parrafo_toc = indice
-                break
-
-        if indice_parrafo_toc is None:
-            return False
-
-        parrafos_toc = parrafos[
-            indice_parrafo_toc + 1:
-            indice_parrafo_toc + 1 + len(titulos_toc)
-        ]
-        actualizados = 0
-
-        for titulo, parrafo in zip(titulos_toc, parrafos_toc):
-            numero_pagina = paginas_titulos.get(titulo)
-
-            if numero_pagina is None:
-                continue
-
-            nodos_texto = parrafo.xpath(
-                ".//w:t",
-                namespaces=espacios,
-            )
-
-            for nodo in reversed(nodos_texto):
-                valor = nodo.text or ""
-
-                if re.search(r"\d+\s*$", valor):
-                    nodo.text = re.sub(
-                        r"\d+\s*$",
-                        str(numero_pagina),
-                        valor,
-                    )
-                    actualizados += 1
-                    break
-
-        if actualizados < 10:
-            return False
-
-        contenido_zip["word/document.xml"] = etree.tostring(
-            documento_xml,
-            xml_declaration=True,
-            encoding="UTF-8",
-            standalone="yes",
-        )
-
-        ruta_temporal_docx = carpeta_temporal / "informe_actualizado.docx"
-
-        with ZipFile(
-            ruta_temporal_docx,
-            "w",
-            ZIP_DEFLATED,
-        ) as archivo_salida:
-            for nombre, contenido in contenido_zip.items():
-                archivo_salida.writestr(nombre, contenido)
-
-        shutil.copy2(ruta_temporal_docx, ruta_docx)
-        return True
-
-    except (
-        OSError,
-        subprocess.SubprocessError,
-        ValueError,
-        KeyError,
-        etree.XMLSyntaxError,
-    ):
-        return False
-
-    except Exception:
-        return False
-
-    finally:
-        shutil.rmtree(
-            carpeta_temporal,
-            ignore_errors=True,
-        )
+    configurar_estilos_y_tabla_contenido(documento)
+    marcar_actualizacion_campos(documento)
 
 
 
@@ -2377,7 +2129,7 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
         "SENA, TecnoParque, Informe Final, GCDTP-F-023 V01"
     )
 
-    configurar_estilos_y_tabla_contenido(documento)
+    preparar_toc_para_word(documento)
 
     # Limpieza final del salto heredado antes de Anexos, después de aplicar estilos.
     encabezado_anexos_final = buscar_parrafo(
@@ -2394,9 +2146,6 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
                 padre.remove(salto)
 
     documento.save(str(ruta_salida))
-
-    # Actualiza los números reales sin UNO; si falla, conserva el DOCX.
-    actualizar_toc_con_libreoffice(ruta_salida)
 
     datos_json = serializar_datos_informe(datos)
     datos_json["ruta_docx"] = str(ruta_salida)
@@ -2428,7 +2177,9 @@ def render_informe_tecnico_final(
         "El formulario solicita los datos institucionales, la descripción general, "
         "los entregables, la innovación, la metodología utilizada, las actividades "
         "desarrolladas y el impacto. Las actividades se escriben en un solo campo "
-        "y se articulan con la metodología para generar el desarrollo del proyecto."
+        "y se articulan con la metodología para generar el desarrollo del proyecto. "
+        "La tabla de contenido queda configurada para actualizarse automáticamente "
+        "al abrir el archivo en Microsoft Word."
     )
 
     datos_key = "datos_informe_tecnico_final_formulario_minimo"
