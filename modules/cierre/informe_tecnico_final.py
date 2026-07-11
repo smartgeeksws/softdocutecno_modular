@@ -40,7 +40,7 @@ from utils.validaciones import validar_campos_obligatorios
 
 
 VERSION_INFORME_TECNICO_FINAL = (
-    "VERSION_APROBADA_DESCARGA_ESTABLE_SIN_RERUN"
+    "VERSION_APROBADA_TABLA_ENTREGABLES_CORREGIDOS"
 )
 CODIGO_FORMATO_INFORME = "GCDTP-F-023 V01"
 NOMBRE_PLANTILLA_INFORME = "GCDTP-F-023_V01_Formato_Informe_Final.docx"
@@ -91,6 +91,7 @@ CLAVES_CONTENIDO = [
     "estado_arte_tecnica",
     "metodologia_desarrollo",
     "actividades_corregidas",
+    "entregables_corregidos",
     "desarrollo_proyecto",
     "resultados_obtenidos",
     "analisis_viabilidad",
@@ -160,6 +161,25 @@ def dividir_lineas(texto: str) -> list[str]:
         ]
 
     return elementos
+
+
+def dividir_entregables(texto: str) -> list[str]:
+    """Convierte el campo de entregables en una lista sin alterar su sentido."""
+    contenido = str(texto or "").replace(";", "\n")
+    entregables: list[str] = []
+
+    for linea in contenido.splitlines():
+        linea = re.sub(
+            r"^\s*(?:[-•*]|\d+[.)-]?)\s*",
+            "",
+            linea,
+        )
+        linea_limpia = limpiar_texto(linea)
+
+        if linea_limpia:
+            entregables.append(linea_limpia)
+
+    return entregables
 
 
 def dividir_actividades(texto: str) -> list[str]:
@@ -539,17 +559,17 @@ def configurar_estilos_y_tabla_contenido(documento: Document) -> None:
 def insertar_tabla_resultados(
     documento: Document,
     parrafo_ancla: Paragraph,
-    actividades: list[str],
+    entregables: list[str],
 ) -> None:
-    actividades_limpias = [
-        limpiar_texto(str(actividad))
-        for actividad in actividades
-        if limpiar_texto(str(actividad))
+    entregables_limpios = [
+        limpiar_texto(str(entregable))
+        for entregable in entregables
+        if limpiar_texto(str(entregable))
     ]
 
-    if not actividades_limpias:
-        actividades_limpias = [
-            "No se registraron actividades ejecutadas para relacionar."
+    if not entregables_limpios:
+        entregables_limpios = [
+            "No se registraron entregables obtenidos para relacionar."
         ]
 
     tabla = documento.add_table(
@@ -563,7 +583,7 @@ def insertar_tabla_resultados(
     anchos = [Cm(1.2), Cm(11.3), Cm(4.6)]
     encabezados = [
         "N.°",
-        "Descripción de la actividad ejecutada",
+        "Descripción del entregable obtenido",
         "Evidencia",
     ]
 
@@ -576,11 +596,11 @@ def insertar_tabla_resultados(
             run.bold = True
         celda.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    for numero, actividad in enumerate(actividades_limpias, start=1):
+    for numero, entregable in enumerate(entregables_limpios, start=1):
         fila = tabla.add_row()
         valores = [
             str(numero),
-            actividad,
+            entregable,
             "Agregar enlace: ______________________________",
         ]
 
@@ -593,6 +613,7 @@ def insertar_tabla_resultados(
         fila.cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     parrafo_ancla._p.addnext(tabla._tbl)
+
 
 
 def serializar_datos_informe(datos: dict) -> dict:
@@ -750,6 +771,35 @@ def actividades_en_texto(actividades: list[str]) -> str:
         f"{indice}. {actividad}"
         for indice, actividad in enumerate(actividades_limpias, start=1)
     )
+
+
+def corregir_entregable_basico(texto: str) -> str:
+    """
+    Corrección de respaldo para modo prueba.
+
+    La mejora técnica avanzada se realiza con la API; esta función conserva el
+    sentido original, normaliza la redacción y evita inventar características.
+    """
+    entregable = limpiar_texto(texto)
+
+    if not entregable:
+        return ""
+
+    entregable = re.sub(
+        r"^\s*(?:[-•*]|\d+[.)-]?)\s*",
+        "",
+        entregable,
+    ).strip()
+
+    if not entregable:
+        return ""
+
+    entregable = entregable[0].upper() + entregable[1:]
+
+    if entregable[-1] not in ".!?":
+        entregable += "."
+
+    return entregable
 
 
 def corregir_actividad_basica(texto: str) -> str:
@@ -1541,6 +1591,11 @@ def contenido_modo_prueba(datos: dict) -> dict:
         for actividad in datos.get("actividades_ejecutadas_base", [])
         if corregir_actividad_basica(actividad)
     ]
+    entregables_corregidos = [
+        corregir_entregable_basico(entregable)
+        for entregable in datos.get("entregables_proyecto_lista", [])
+        if corregir_entregable_basico(entregable)
+    ]
     referentes = datos.get("referentes_estado_arte", [])
 
     referentes_texto = " ".join(
@@ -1607,6 +1662,7 @@ def contenido_modo_prueba(datos: dict) -> dict:
             "sin exigir al usuario una selección metodológica adicional."
         ),
         "actividades_corregidas": actividades_corregidas,
+        "entregables_corregidos": entregables_corregidos,
         "desarrollo_proyecto": (
             f"El desarrollo se organizó con base en {metodologia}. Las actividades "
             "ejecutadas fueron: "
@@ -1617,11 +1673,14 @@ def contenido_modo_prueba(datos: dict) -> dict:
             "se presentan como productos del proceso y no como actividades adicionales."
         ),
         "resultados_obtenidos": (
-            f"Los entregables obtenidos fueron: {entregables} Estos resultados se "
-            "analizan por su relación con los objetivos, las actividades ejecutadas, "
-            f"el aporte innovador —{innovacion}— y el TRL alcanzado. La tabla de "
-            "actividades incorpora una columna abierta para que el usuario agregue "
-            "posteriormente enlaces de evidencia directamente en Word."
+            "Los entregables obtenidos fueron: "
+            + actividades_en_texto(entregables_corregidos)
+            + " Estos resultados se analizan por su relación con los objetivos, "
+            "las actividades ejecutadas, el aporte innovador —"
+            + innovacion
+            + "— y el TRL alcanzado. La tabla de entregables incorpora una columna "
+            "abierta para que el usuario agregue posteriormente enlaces de evidencia "
+            "directamente en Word."
         ),
         "analisis_viabilidad": (
             "La viabilidad se examina considerando la estabilidad técnica, la operación, "
@@ -1688,6 +1747,7 @@ def normalizar_contenido(
         if clave in {
             "objetivos_especificos",
             "actividades_corregidas",
+            "entregables_corregidos",
             "referencias_bibliograficas",
             "anexos",
         }:
@@ -1730,6 +1790,24 @@ def normalizar_contenido(
         resultado["actividades_corregidas"].extend(
             corregir_actividad_basica(item)
             for item in faltantes
+        )
+
+    cantidad_entregables = len(
+        datos.get("entregables_proyecto_lista", [])
+    )
+    resultado["entregables_corregidos"] = resultado[
+        "entregables_corregidos"
+    ][:cantidad_entregables]
+
+    if len(resultado["entregables_corregidos"]) < cantidad_entregables:
+        faltantes_entregables = datos.get(
+            "entregables_proyecto_lista",
+            [],
+        )[len(resultado["entregables_corregidos"]):]
+
+        resultado["entregables_corregidos"].extend(
+            corregir_entregable_basico(item)
+            for item in faltantes_entregables
         )
 
     resultado["referencias_bibliograficas"] = (
@@ -1780,6 +1858,10 @@ def generar_contenido_con_ia(
         "actividades_ejecutadas_base",
         [],
     )
+    entregables_originales = datos.get(
+        "entregables_proyecto_lista",
+        [],
+    )
     referentes = datos.get("referentes_estado_arte", [])
 
     reglas_comunes = """
@@ -1814,7 +1896,7 @@ DESCRIPCIÓN GENERAL DEL PROYECTO
 {datos.get('descripcion_general_proyecto', '')}
 
 ENTREGABLES OBTENIDOS
-{datos.get('entregables_proyecto_base', '')}
+{actividades_en_texto(entregables_originales)}
 
 INNOVACIÓN DEL PROYECTO
 {datos.get('innovacion_proyecto_base', '')}
@@ -1833,7 +1915,7 @@ DOS REFERENTES REALES VERIFICADOS PARA EL ESTADO DEL ARTE
 """
 
     instrucciones_bloque_1 = reglas_comunes + """
-Genera los apartados 2, 3, 4, 5 y 6 y corrige las actividades.
+Genera los apartados 2, 3, 4, 5 y 6; corrige las actividades y mejora técnicamente los entregables.
 
 REQUISITOS ESPECÍFICOS
 - Introducción: contexto, propósito, entorno, actores y alcance. No desarrolles
@@ -1855,6 +1937,12 @@ REQUISITOS ESPECÍFICOS
   actividades suministradas. Corrige ortografía y mejora la redacción. Cada
   actividad debe ser breve, técnica y clara; no agregues entregables, estados,
   observaciones ni evidencias.
+- Entregables corregidos: conserva exactamente la cantidad y el sentido de los
+  entregables suministrados. Corrige ortografía, gramática y puntuación; mejora
+  su redacción y precisión técnica para que cada elemento identifique claramente
+  el producto, prototipo, sistema, componente, documento o desarrollo obtenido.
+  No inventes funciones, tecnologías, cantidades, validaciones ni características
+  que no estén presentes en la información original.
 """
 
     entrada_bloque_1 = contexto + """
@@ -1867,7 +1955,8 @@ ESTRUCTURA JSON OBLIGATORIA
   "objetivos_especificos": ["objetivo 1", "objetivo 2", "objetivo 3", "objetivo 4"],
   "estado_arte_tecnica": "300 a 340 palabras con dos citas",
   "metodologia_desarrollo": "300 a 340 palabras",
-  "actividades_corregidas": ["actividad corregida 1", "actividad corregida 2"]
+  "actividades_corregidas": ["actividad corregida 1", "actividad corregida 2"],
+  "entregables_corregidos": ["entregable mejorado 1", "entregable mejorado 2"]
 }
 """
 
@@ -1886,6 +1975,9 @@ ESTRUCTURA JSON OBLIGATORIA
     actividades_corregidas = bloque_1_normalizado[
         "actividades_corregidas"
     ]
+    entregables_corregidos = bloque_1_normalizado[
+        "entregables_corregidos"
+    ]
 
     instrucciones_bloque_2 = reglas_comunes + """
 Genera los apartados 7, 8, 9, 10, 11 y 12.
@@ -1893,9 +1985,10 @@ Genera los apartados 7, 8, 9, 10, 11 y 12.
 REQUISITOS ESPECÍFICOS
 - Desarrollo: organiza la ejecución y articula la metodología seleccionada con las
   actividades corregidas. No repitas la introducción.
-- Resultados: utiliza los entregables como fuente principal y explica su relación
-  con objetivos, actividades, innovación y TRL. No enumeres las actividades,
-  porque aparecerán en una tabla independiente.
+- Resultados: utiliza los entregables corregidos como fuente principal y explica
+  su relación con objetivos, actividades, innovación y TRL. No repitas la lista
+  completa dentro del texto, porque los entregables aparecerán en una tabla
+  independiente con una columna disponible para evidencias.
 - Viabilidad: analiza solo los aspectos técnicos, operativos, económicos,
   normativos, de adopción, sostenibilidad y escalabilidad pertinentes.
 - Propiedad intelectual y transferencia: determina automáticamente los
@@ -1915,6 +2008,9 @@ REQUISITOS ESPECÍFICOS
 
 ACTIVIDADES CORREGIDAS
 {actividades_en_texto(actividades_corregidas)}
+
+ENTREGABLES CORREGIDOS Y MEJORADOS TÉCNICAMENTE
+{actividades_en_texto(entregables_corregidos)}
 
 RECOMENDACIÓN OBLIGATORIA DE CONTINUIDAD TRL
 {recomendacion_continuidad_trl(datos.get('trl_alcanzado', ''))}
@@ -1944,6 +2040,7 @@ ESTRUCTURA JSON OBLIGATORIA
         contenido.update(bloque_2)
 
     contenido["actividades_corregidas"] = actividades_corregidas
+    contenido["entregables_corregidos"] = entregables_corregidos
     contenido["referencias_bibliograficas"] = (
         referencias_bibliograficas_proyecto(datos)
     )
@@ -2081,11 +2178,11 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
     introduccion_objetivos = parrafo_siguiente(encabezado_objetivos)
     eliminar_parrafo(introduccion_objetivos)
 
-    # Tabla institucional de resultados basada únicamente en actividades.
+    # Tabla institucional de resultados basada únicamente en los entregables.
     insertar_tabla_resultados(
         documento,
         destinos["8. Resultados obtenidos"],
-        contenido["actividades_corregidas"],
+        contenido["entregables_corregidos"],
     )
 
     encabezado_referencias = buscar_parrafo(
@@ -2262,10 +2359,15 @@ def render_informe_tecnico_final(
         entregables_proyecto_base = st.text_area(
             "Entregables obtenidos",
             placeholder=(
-                "Describe los productos, prototipos, componentes, documentos, "
-                "sistemas o desarrollos realmente obtenidos al cierre."
+                "Escribe un entregable por línea. Puedes registrar productos, "
+                "prototipos, componentes, documentos, sistemas o desarrollos "
+                "realmente obtenidos al cierre."
             ),
             height=210,
+            help=(
+                "El sistema corregirá la ortografía y mejorará la redacción y "
+                "precisión técnica de cada entregable sin inventar características."
+            ),
         )
 
         innovacion_proyecto_base = st.text_area(
@@ -2374,6 +2476,16 @@ def render_informe_tecnico_final(
             )
             st.stop()
 
+        entregables_validos = dividir_entregables(
+            entregables_proyecto_base
+        )
+
+        if not entregables_validos:
+            st.error(
+                "Escribe al menos un entregable obtenido."
+            )
+            st.stop()
+
         actividades_validas = dividir_actividades(
             actividades_ejecutadas_texto
         )
@@ -2406,6 +2518,7 @@ def render_informe_tecnico_final(
             "entregables_proyecto_base": limpiar_texto(
                 entregables_proyecto_base
             ),
+            "entregables_proyecto_lista": entregables_validos,
             "innovacion_proyecto_base": limpiar_texto(
                 innovacion_proyecto_base
             ),
@@ -2477,8 +2590,12 @@ def render_informe_tecnico_final(
             metodologias_en_texto(datos),
         )
         st.write(
-            "**Actividades procesadas:**",
+            "**Actividades procesadas para el desarrollo:**",
             len(contenido.get("actividades_corregidas", [])),
+        )
+        st.write(
+            "**Entregables procesados para la tabla de resultados:**",
+            len(contenido.get("entregables_corregidos", [])),
         )
         st.caption(
             "El desarrollo del proyecto fue redactado articulando la metodología "
@@ -2489,11 +2606,11 @@ def render_informe_tecnico_final(
         tabla_resultados = [
             {
                 "N.°": indice,
-                "Descripción de la actividad ejecutada": actividad,
+                "Descripción del entregable obtenido": entregable,
                 "Evidencia": "Agregar enlace en Word",
             }
-            for indice, actividad in enumerate(
-                contenido["actividades_corregidas"],
+            for indice, entregable in enumerate(
+                contenido["entregables_corregidos"],
                 start=1,
             )
         ]
