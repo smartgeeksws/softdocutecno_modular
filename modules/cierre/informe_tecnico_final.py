@@ -40,7 +40,7 @@ from utils.validaciones import validar_campos_obligatorios
 
 
 VERSION_INFORME_TECNICO_FINAL = (
-    "VERSION_APROBADA_TABLA_ENTREGABLES_CORREGIDOS"
+    "VERSION_APROBADA_RESULTADOS_REDACTADOS_SIN_COPIA_LITERAL"
 )
 CODIGO_FORMATO_INFORME = "GCDTP-F-023 V01"
 NOMBRE_PLANTILLA_INFORME = "GCDTP-F-023_V01_Formato_Informe_Final.docx"
@@ -161,6 +161,94 @@ def dividir_lineas(texto: str) -> list[str]:
         ]
 
     return elementos
+
+
+def normalizar_para_comparacion(texto: str) -> str:
+    """Normaliza un texto para detectar coincidencias literales."""
+    texto_normalizado = limpiar_texto(texto).casefold()
+    texto_normalizado = re.sub(
+        r"[^a-záéíóúüñ0-9\s]",
+        " ",
+        texto_normalizado,
+    )
+    return re.sub(r"\s+", " ", texto_normalizado).strip()
+
+
+def contiene_copia_textual(
+    texto_generado: str,
+    textos_originales: list[str],
+    minimo_palabras: int = 6,
+) -> bool:
+    """
+    Detecta si un apartado narrativo reutiliza literalmente fragmentos extensos
+    suministrados por el usuario.
+    """
+    generado = normalizar_para_comparacion(texto_generado)
+
+    if not generado:
+        return False
+
+    for original in textos_originales:
+        palabras = normalizar_para_comparacion(original).split()
+
+        if not palabras:
+            continue
+
+        if len(palabras) < minimo_palabras:
+            frase = " ".join(palabras)
+            if len(palabras) >= 3 and frase in generado:
+                return True
+            continue
+
+        for inicio in range(len(palabras) - minimo_palabras + 1):
+            fragmento = " ".join(
+                palabras[inicio:inicio + minimo_palabras]
+            )
+            if fragmento in generado:
+                return True
+
+    return False
+
+
+def resultados_modo_prueba_sin_copia(
+    datos: dict,
+    cantidad_entregables: int,
+) -> str:
+    """
+    Genera un texto de respaldo analítico sin transcribir los entregables.
+    """
+    cantidad_texto = (
+        "un entregable técnico"
+        if cantidad_entregables == 1
+        else f"{cantidad_entregables} entregables técnicos"
+    )
+
+    return (
+        f"El cierre del proyecto permitió consolidar {cantidad_texto}, cuya "
+        "pertinencia se analiza a partir de su correspondencia con los objetivos "
+        "planteados, las actividades desarrolladas y el nivel de madurez "
+        f"tecnológica {datos.get('trl_alcanzado', '')}. Los productos obtenidos "
+        "representan evidencias concretas del avance alcanzado, debido a que "
+        "materializan decisiones de diseño, implementación, integración, "
+        "documentación o validación realizadas durante la ejecución. Su valoración "
+        "no se limita a confirmar su existencia, sino que considera la utilidad "
+        "técnica, la coherencia funcional, la trazabilidad con los requerimientos y "
+        "la posibilidad de continuar con procesos posteriores de ajuste, prueba o "
+        "escalamiento. La relación entre estos resultados y las actividades permite "
+        "identificar cómo cada etapa del desarrollo contribuyó a la construcción de "
+        "productos verificables. Asimismo, el análisis reconoce el aporte innovador "
+        "del proyecto sin atribuir características, desempeños o validaciones que no "
+        "hayan sido documentados. Desde la perspectiva del TRL alcanzado, los "
+        "entregables constituyen una base técnica para sustentar el estado actual de "
+        "la solución y orientar las acciones necesarias para avanzar hacia un nivel "
+        "superior de madurez. La tabla presentada a continuación identifica cada "
+        "producto mediante una descripción corregida y mejorada técnicamente, e "
+        "incluye un espacio independiente para incorporar los enlaces o soportes de "
+        "evidencia correspondientes. De esta manera, el apartado conserva una "
+        "redacción analítica, evita repetir literalmente la información ingresada y "
+        "mantiene una separación clara entre la explicación de los resultados y la "
+        "relación detallada de los entregables."
+    )
 
 
 def dividir_entregables(texto: str) -> list[str]:
@@ -1672,15 +1760,9 @@ def contenido_modo_prueba(datos: dict) -> dict:
             "se relaciona con una decisión o avance concreto, mientras los entregables "
             "se presentan como productos del proceso y no como actividades adicionales."
         ),
-        "resultados_obtenidos": (
-            "Los entregables obtenidos fueron: "
-            + actividades_en_texto(entregables_corregidos)
-            + " Estos resultados se analizan por su relación con los objetivos, "
-            "las actividades ejecutadas, el aporte innovador —"
-            + innovacion
-            + "— y el TRL alcanzado. La tabla de entregables incorpora una columna "
-            "abierta para que el usuario agregue posteriormente enlaces de evidencia "
-            "directamente en Word."
+        "resultados_obtenidos": resultados_modo_prueba_sin_copia(
+            datos,
+            len(entregables_corregidos),
         ),
         "analisis_viabilidad": (
             "La viabilidad se examina considerando la estabilidad técnica, la operación, "
@@ -1848,6 +1930,68 @@ def normalizar_contenido(
     return resultado
 
 
+def reescribir_resultados_sin_copia_literal(
+    texto_resultados: str,
+    entregables_corregidos: list[str],
+    entregables_originales: list[str],
+    datos: dict,
+    modelo_openai: str,
+) -> str:
+    """
+    Reescribe Resultados obtenidos cuando detecta coincidencias literales con
+    los entregables originales.
+    """
+    respaldo = resultados_modo_prueba_sin_copia(
+        datos,
+        len(entregables_corregidos),
+    )
+
+    try:
+        respuesta = generar_json_openai(
+            instrucciones=(
+                "Actúa como redactor técnico senior de TecnoParque SENA. "
+                "Reescribe exclusivamente el apartado Resultados obtenidos en "
+                "español formal, con 300 a 340 palabras. Corrige ortografía, "
+                "gramática, puntuación, coherencia y precisión técnica. No "
+                "copies literalmente, no enumeres y no reproduzcas frases de "
+                "los entregables originales. Analiza su relación con objetivos, "
+                "actividades, innovación y TRL. No inventes datos. Responde "
+                "exclusivamente en JSON válido con la clave resultados_obtenidos."
+            ),
+            entrada=(
+                "TEXTO QUE DEBE REESCRIBIRSE\n"
+                f"{texto_resultados}\n\n"
+                "ENTREGABLES CORREGIDOS COMO FUENTE CONCEPTUAL\n"
+                f"{actividades_en_texto(entregables_corregidos)}\n\n"
+                "TRL ALCANZADO\n"
+                f"{datos.get('trl_alcanzado', '')}\n\n"
+                "ESTRUCTURA JSON\n"
+                '{"resultados_obtenidos": "300 a 340 palabras"}'
+            ),
+            modelo=modelo_openai,
+            temperature=0.1,
+        )
+
+        if isinstance(respuesta, dict):
+            reescrito = limpiar_texto(
+                str(respuesta.get("resultados_obtenidos", ""))
+            )
+
+            if (
+                reescrito
+                and not contiene_copia_textual(
+                    reescrito,
+                    entregables_originales,
+                )
+            ):
+                return reescrito
+
+    except Exception:
+        pass
+
+    return respaldo
+
+
 def generar_contenido_con_ia(
     datos: dict,
     modelo_openai: str,
@@ -1877,6 +2021,13 @@ REGLAS OBLIGATORIAS
 - Cada sección debe cumplir únicamente el propósito definido en el formato.
 - Cada apartado narrativo debe contener entre 300 y 340 palabras.
 - No uses introducciones genéricas ni frases de relleno.
+- Corrige ortografía, gramática, puntuación, concordancia y redacción técnica de
+  todos los textos suministrados por el usuario antes de incorporarlos.
+- No copies literalmente oraciones ni fragmentos extensos de los campos
+  diligenciados. Reformula siempre el contenido con lenguaje técnico,
+  institucional y claro, conservando estrictamente su significado.
+- Las listas destinadas a tablas también deben pasar por corrección y mejora
+  técnica, aunque puedan conservar términos propios, nombres o denominaciones.
 - No uses markdown.
 - Responde exclusivamente en JSON válido.
 """
@@ -1979,16 +2130,48 @@ ESTRUCTURA JSON OBLIGATORIA
         "entregables_corregidos"
     ]
 
+    contexto_bloque_2 = f"""
+DATOS GENERALES
+Talento: {datos.get('nombre_talento', '')}
+Proyecto: {datos.get('nombre_proyecto', '')}
+Código: {datos.get('codigo_proyecto', '')}
+Experto: {datos.get('nombre_experto', '')}
+Línea tecnológica: {datos.get('linea_tecnologica', '')}
+TRL inicial: {datos.get('trl_inicial', '')}
+TRL alcanzado: {datos.get('trl_alcanzado', '')}
+TecnoParque: {datos.get('tecnoparque', '')}
+
+DESCRIPCIÓN GENERAL DEL PROYECTO
+{datos.get('descripcion_general_proyecto', '')}
+
+INNOVACIÓN DEL PROYECTO
+{datos.get('innovacion_proyecto_base', '')}
+
+ACTIVIDADES CORREGIDAS
+{actividades_en_texto(actividades_corregidas)}
+
+ENTREGABLES CORREGIDOS Y MEJORADOS TÉCNICAMENTE
+{actividades_en_texto(entregables_corregidos)}
+
+IMPACTO DEL PROYECTO
+{datos.get('impacto_proyecto_base', '')}
+
+METODOLOGÍA DETERMINADA
+{metodologia}
+"""
+
     instrucciones_bloque_2 = reglas_comunes + """
 Genera los apartados 7, 8, 9, 10, 11 y 12.
 
 REQUISITOS ESPECÍFICOS
 - Desarrollo: organiza la ejecución y articula la metodología seleccionada con las
   actividades corregidas. No repitas la introducción.
-- Resultados: utiliza los entregables corregidos como fuente principal y explica
-  su relación con objetivos, actividades, innovación y TRL. No repitas la lista
-  completa dentro del texto, porque los entregables aparecerán en una tabla
-  independiente con una columna disponible para evidencias.
+- Resultados: utiliza exclusivamente los entregables corregidos como fuente
+  conceptual y explica su relación con objetivos, actividades, innovación y TRL.
+  Corrige y mejora completamente la redacción del apartado. No copies, enumeres
+  ni reproduzcas literalmente los textos ingresados en Entregables obtenidos.
+  El cuerpo debe ser analítico y redactado con palabras propias; la identificación
+  detallada de cada entregable aparecerá únicamente en la tabla independiente.
 - Viabilidad: analiza solo los aspectos técnicos, operativos, económicos,
   normativos, de adopción, sostenibilidad y escalabilidad pertinentes.
 - Propiedad intelectual y transferencia: determina automáticamente los
@@ -2004,13 +2187,7 @@ REQUISITOS ESPECÍFICOS
   afirmes que el nivel siguiente ya fue alcanzado.
 """
 
-    entrada_bloque_2 = contexto + f"""
-
-ACTIVIDADES CORREGIDAS
-{actividades_en_texto(actividades_corregidas)}
-
-ENTREGABLES CORREGIDOS Y MEJORADOS TÉCNICAMENTE
-{actividades_en_texto(entregables_corregidos)}
+    entrada_bloque_2 = contexto_bloque_2 + f"""
 
 RECOMENDACIÓN OBLIGATORIA DE CONTINUIDAD TRL
 {recomendacion_continuidad_trl(datos.get('trl_alcanzado', ''))}
@@ -2041,6 +2218,24 @@ ESTRUCTURA JSON OBLIGATORIA
 
     contenido["actividades_corregidas"] = actividades_corregidas
     contenido["entregables_corregidos"] = entregables_corregidos
+    resultados_generados = limpiar_texto(
+        str(contenido.get("resultados_obtenidos", ""))
+    )
+
+    if contiene_copia_textual(
+        resultados_generados,
+        entregables_originales,
+    ):
+        contenido["resultados_obtenidos"] = (
+            reescribir_resultados_sin_copia_literal(
+                texto_resultados=resultados_generados,
+                entregables_corregidos=entregables_corregidos,
+                entregables_originales=entregables_originales,
+                datos=datos,
+                modelo_openai=modelo_openai,
+            )
+        )
+
     contenido["referencias_bibliograficas"] = (
         referencias_bibliograficas_proyecto(datos)
     )
