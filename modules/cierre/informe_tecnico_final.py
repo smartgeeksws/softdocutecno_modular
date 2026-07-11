@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -36,7 +37,7 @@ from utils.validaciones import validar_campos_obligatorios
 
 
 VERSION_INFORME_TECNICO_FINAL = (
-    "VERSION_APROBADA_TOC_PAGINACION_REAL"
+    "VERSION_APROBADA_TOC_ESTABLE_SIN_SEGFAULT"
 )
 CODIGO_FORMATO_INFORME = "GCDTP-F-023 V01"
 NOMBRE_PLANTILLA_INFORME = "GCDTP-F-023_V01_Formato_Informe_Final.docx"
@@ -1958,13 +1959,11 @@ ESTRUCTURA JSON OBLIGATORIA
 
 def actualizar_toc_con_libreoffice(ruta_docx: Path) -> bool:
     """
-    Recalcula la tabla de contenido después de terminar el documento.
+    Actualiza la tabla de contenido en un proceso completamente aislado.
 
-    Word calcula la paginación al maquetar el archivo; python-docx no dispone
-    de un motor de paginación. Por eso se utiliza LibreOffice en modo oculto
-    para actualizar los índices y guardar en DOCX los números de página reales.
-    Si LibreOffice no está disponible, el campo TOC queda marcado para que
-    Microsoft Word lo actualice al abrir el documento.
+    LibreOffice y UNO se ejecutan fuera del proceso de Streamlit para evitar
+    fallos nativos. El documento se guarda mediante ``store()``, se cierra de
+    forma ordenada y luego se termina el escritorio de LibreOffice.
     """
     ejecutable = shutil.which("libreoffice") or shutil.which("soffice")
 
@@ -1984,18 +1983,191 @@ def actualizar_toc_con_libreoffice(ruta_docx: Path) -> bool:
         puerto = socket_prueba.getsockname()[1]
 
     carpeta_temporal = Path(
-        tempfile.mkdtemp(prefix="softdocutecno_toc_")
+        tempfile.mkdtemp(prefix="softdocutecno_toc_estable_")
     )
     perfil = carpeta_temporal / "perfil_libreoffice"
-    script_actualizacion = carpeta_temporal / "actualizar_toc.py"
+    script_actualizacion = carpeta_temporal / "actualizar_toc_estable.py"
 
     script_actualizacion.write_text(
-        "import subprocess\nimport sys\nimport time\nfrom pathlib import Path\n\nsys.path.append('/usr/lib/python3/dist-packages')\n\ntry:\n    import uno\n    from com.sun.star.beans import PropertyValue\nexcept Exception:\n    raise SystemExit(2)\n\nruta = Path(sys.argv[1]).resolve()\nejecutable = sys.argv[2]\npuerto = int(sys.argv[3])\nperfil = Path(sys.argv[4]).resolve()\nperfil.mkdir(parents=True, exist_ok=True)\n\nproceso = subprocess.Popen(\n    [\n        ejecutable,\n        '--headless',\n        '--nologo',\n        '--nodefault',\n        '--nofirststartwizard',\n        '--norestore',\n        '--nolockcheck',\n        f'-env:UserInstallation=file://{perfil.as_posix()}',\n        f'--accept=socket,host=127.0.0.1,port={puerto};urp;StarOffice.ComponentContext',\n    ],\n    stdout=subprocess.DEVNULL,\n    stderr=subprocess.DEVNULL,\n)\n\ndef propiedad(nombre, valor):\n    item = PropertyValue()\n    item.Name = nombre\n    item.Value = valor\n    return item\n\ndocumento = None\n\ntry:\n    contexto_local = uno.getComponentContext()\n    resolvedor = contexto_local.ServiceManager.createInstanceWithContext(\n        'com.sun.star.bridge.UnoUrlResolver',\n        contexto_local,\n    )\n\n    contexto = None\n    for _ in range(80):\n        try:\n            contexto = resolvedor.resolve(\n                f'uno:socket,host=127.0.0.1,port={puerto};urp;StarOffice.ComponentContext'\n            )\n            break\n        except Exception:\n            time.sleep(0.25)\n\n    if contexto is None:\n        raise SystemExit(3)\n\n    escritorio = contexto.ServiceManager.createInstanceWithContext(\n        'com.sun.star.frame.Desktop',\n        contexto,\n    )\n\n    documento = escritorio.loadComponentFromURL(\n        uno.systemPathToFileUrl(str(ruta)),\n        '_blank',\n        0,\n        (\n            propiedad('Hidden', True),\n            propiedad('ReadOnly', False),\n            propiedad('UpdateDocMode', 3),\n        ),\n    )\n\n    if documento is None:\n        raise SystemExit(4)\n\n    try:\n        documento.updateLinks()\n    except Exception:\n        pass\n\n    try:\n        documento.getTextFields().refresh()\n    except Exception:\n        pass\n\n    try:\n        documento.calculateAll()\n    except Exception:\n        pass\n\n    time.sleep(0.8)\n\n    indices = documento.getDocumentIndexes()\n    for numero in range(indices.getCount()):\n        indices.getByIndex(numero).update()\n\n    try:\n        documento.getTextFields().refresh()\n    except Exception:\n        pass\n\n    try:\n        documento.calculateAll()\n    except Exception:\n        pass\n\n    time.sleep(0.8)\n\n    for numero in range(indices.getCount()):\n        indices.getByIndex(numero).update()\n\n    documento.storeAsURL(\n        uno.systemPathToFileUrl(str(ruta)),\n        (\n            propiedad('FilterName', 'Office Open XML Text'),\n            propiedad('Overwrite', True),\n        ),\n    )\n\n    documento.close(True)\n    documento = None\nfinally:\n    if documento is not None:\n        try:\n            documento.close(True)\n        except Exception:\n            pass\n\n    proceso.terminate()\n    try:\n        proceso.wait(timeout=8)\n    except Exception:\n        proceso.kill()",
+        r"""
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+sys.path.append("/usr/lib/python3/dist-packages")
+
+try:
+    import uno
+    from com.sun.star.beans import PropertyValue
+except Exception:
+    raise SystemExit(2)
+
+ruta = Path(sys.argv[1]).resolve()
+ejecutable = sys.argv[2]
+puerto = int(sys.argv[3])
+perfil = Path(sys.argv[4]).resolve()
+perfil.mkdir(parents=True, exist_ok=True)
+
+
+def propiedad(nombre, valor):
+    item = PropertyValue()
+    item.Name = nombre
+    item.Value = valor
+    return item
+
+
+proceso = subprocess.Popen(
+    [
+        ejecutable,
+        "--headless",
+        "--nologo",
+        "--nodefault",
+        "--nofirststartwizard",
+        "--norestore",
+        "--nolockcheck",
+        f"-env:UserInstallation=file://{perfil.as_posix()}",
+        (
+            "--accept=socket,host=127.0.0.1,"
+            f"port={puerto};urp;StarOffice.ComponentContext"
+        ),
+    ],
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
+
+documento = None
+escritorio = None
+
+try:
+    contexto_local = uno.getComponentContext()
+    resolvedor = contexto_local.ServiceManager.createInstanceWithContext(
+        "com.sun.star.bridge.UnoUrlResolver",
+        contexto_local,
+    )
+
+    contexto = None
+
+    for _ in range(100):
+        try:
+            contexto = resolvedor.resolve(
+                (
+                    "uno:socket,host=127.0.0.1,"
+                    f"port={puerto};urp;StarOffice.ComponentContext"
+                )
+            )
+            break
+        except Exception:
+            time.sleep(0.2)
+
+    if contexto is None:
+        raise SystemExit(3)
+
+    escritorio = contexto.ServiceManager.createInstanceWithContext(
+        "com.sun.star.frame.Desktop",
+        contexto,
+    )
+
+    documento = escritorio.loadComponentFromURL(
+        uno.systemPathToFileUrl(str(ruta)),
+        "_blank",
+        0,
+        (
+            propiedad("Hidden", True),
+            propiedad("ReadOnly", False),
+            propiedad("UpdateDocMode", 3),
+        ),
+    )
+
+    if documento is None:
+        raise SystemExit(4)
+
+    try:
+        documento.updateLinks()
+    except Exception:
+        pass
+
+    try:
+        documento.getTextFields().refresh()
+    except Exception:
+        pass
+
+    try:
+        documento.calculateAll()
+    except Exception:
+        pass
+
+    indices = documento.getDocumentIndexes()
+
+    for _ in range(2):
+        for numero in range(indices.getCount()):
+            indices.getByIndex(numero).update()
+
+        try:
+            documento.getTextFields().refresh()
+        except Exception:
+            pass
+
+        try:
+            documento.calculateAll()
+        except Exception:
+            pass
+
+        time.sleep(0.5)
+
+    documento.store()
+    documento.close(True)
+    documento = None
+
+    try:
+        escritorio.terminate()
+    except Exception:
+        pass
+
+    escritorio = None
+
+finally:
+    if documento is not None:
+        try:
+            documento.close(True)
+        except Exception:
+            pass
+
+    if escritorio is not None:
+        try:
+            escritorio.terminate()
+        except Exception:
+            pass
+
+    try:
+        proceso.wait(timeout=15)
+    except Exception:
+        proceso.terminate()
+
+        try:
+            proceso.wait(timeout=5)
+        except Exception:
+            proceso.kill()
+""",
         encoding="utf-8",
     )
 
+    entorno = os.environ.copy()
+    entorno.update(
+        {
+            "HOME": str(carpeta_temporal),
+            "TMPDIR": str(carpeta_temporal),
+            "SAL_USE_VCLPLUGIN": "svp",
+            "QT_QPA_PLATFORM": "offscreen",
+            "OMP_NUM_THREADS": "1",
+            "MALLOC_ARENA_MAX": "2",
+        }
+    )
+
+    proceso_worker = None
+
     try:
-        resultado = subprocess.run(
+        proceso_worker = subprocess.Popen(
             [
                 python_sistema,
                 str(script_actualizacion),
@@ -2004,16 +2176,53 @@ def actualizar_toc_con_libreoffice(ruta_docx: Path) -> bool:
                 str(puerto),
                 str(perfil),
             ],
-            capture_output=True,
-            text=True,
-            timeout=90,
-            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=entorno,
+            start_new_session=True,
         )
-        return resultado.returncode == 0 and ruta_docx.exists()
+
+        try:
+            codigo_salida = proceso_worker.wait(timeout=100)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(
+                    os.getpgid(proceso_worker.pid),
+                    signal.SIGTERM,
+                )
+            except Exception:
+                proceso_worker.terminate()
+
+            try:
+                codigo_salida = proceso_worker.wait(timeout=8)
+            except Exception:
+                try:
+                    os.killpg(
+                        os.getpgid(proceso_worker.pid),
+                        signal.SIGKILL,
+                    )
+                except Exception:
+                    proceso_worker.kill()
+
+                codigo_salida = proceso_worker.wait(timeout=5)
+
+        return codigo_salida == 0 and ruta_docx.exists()
+
     except Exception:
         return False
+
     finally:
+        if proceso_worker is not None and proceso_worker.poll() is None:
+            try:
+                os.killpg(
+                    os.getpgid(proceso_worker.pid),
+                    signal.SIGKILL,
+                )
+            except Exception:
+                proceso_worker.kill()
+
         shutil.rmtree(carpeta_temporal, ignore_errors=True)
+
 
 
 def generar_docx_informe_tecnico_final(datos: dict) -> str:
