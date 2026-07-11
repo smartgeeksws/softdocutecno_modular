@@ -10,10 +10,13 @@ import signal
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import time
 from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import streamlit as st
+from lxml import etree
 
 try:
     from openai import OpenAI
@@ -37,7 +40,7 @@ from utils.validaciones import validar_campos_obligatorios
 
 
 VERSION_INFORME_TECNICO_FINAL = (
-    "VERSION_APROBADA_TOC_ESTABLE_SIN_SEGFAULT"
+    "VERSION_APROBADA_TOC_PDF_SEGURO"
 )
 CODIGO_FORMATO_INFORME = "GCDTP-F-023 V01"
 NOMBRE_PLANTILLA_INFORME = "GCDTP-F-023_V01_Formato_Informe_Final.docx"
@@ -1959,269 +1962,262 @@ ESTRUCTURA JSON OBLIGATORIA
 
 def actualizar_toc_con_libreoffice(ruta_docx: Path) -> bool:
     """
-    Actualiza la tabla de contenido en un proceso completamente aislado.
+    Calcula la paginación real sin utilizar UNO ni cargar librerías nativas
+    dentro del proceso de Streamlit.
 
-    LibreOffice y UNO se ejecutan fuera del proceso de Streamlit para evitar
-    fallos nativos. El documento se guarda mediante ``store()``, se cierra de
-    forma ordenada y luego se termina el escritorio de LibreOffice.
+    El flujo es el siguiente:
+    1. LibreOffice convierte una copia del DOCX a PDF en un proceso externo.
+    2. pypdf identifica la página real de cada título.
+    3. Se actualizan únicamente los números visibles de la tabla de contenido
+       dentro del DOCX, conservando estilos, hipervínculos y campos de Word.
+
+    Si la actualización falla, el DOCX ya generado se conserva y Word puede
+    recalcular el índice al abrirlo porque los campos permanecen marcados como
+    pendientes de actualización.
     """
+
+    def normalizar_busqueda(valor: str) -> str:
+        texto = unicodedata.normalize("NFKD", str(valor or ""))
+        texto = "".join(
+            caracter
+            for caracter in texto
+            if not unicodedata.combining(caracter)
+        )
+        texto = texto.casefold()
+        texto = re.sub(r"\s+", " ", texto)
+        return texto.strip()
+
     ejecutable = shutil.which("libreoffice") or shutil.which("soffice")
 
     if not ejecutable or not ruta_docx.exists():
         return False
 
-    python_sistema = (
-        "/usr/bin/python3"
-        if Path("/usr/bin/python3").exists()
-        else (shutil.which("python3") or sys.executable)
-    )
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return False
 
-    import socket
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as socket_prueba:
-        socket_prueba.bind(("127.0.0.1", 0))
-        puerto = socket_prueba.getsockname()[1]
+    titulos_toc = [
+        "1. Información general del proyecto",
+        "2. Introducción",
+        "3. Planteamiento del problema",
+        "4. Objetivos",
+        "4.1 Objetivo General",
+        "4.2 Objetivos Específicos",
+        "5. Estado del arte y estado de la técnica",
+        "6. Metodología de desarrollo",
+        "7. Desarrollo del proyecto",
+        "8. Resultados obtenidos",
+        "9. Análisis de viabilidad",
+        "10. Propiedad intelectual y transferencia tecnológica",
+        "11. Impacto del proyecto",
+        "12. Conclusiones",
+        "13. Referencias bibliográficas",
+        "14. Anexos",
+    ]
 
     carpeta_temporal = Path(
-        tempfile.mkdtemp(prefix="softdocutecno_toc_estable_")
-    )
-    perfil = carpeta_temporal / "perfil_libreoffice"
-    script_actualizacion = carpeta_temporal / "actualizar_toc_estable.py"
-
-    script_actualizacion.write_text(
-        r"""
-import subprocess
-import sys
-import time
-from pathlib import Path
-
-sys.path.append("/usr/lib/python3/dist-packages")
-
-try:
-    import uno
-    from com.sun.star.beans import PropertyValue
-except Exception:
-    raise SystemExit(2)
-
-ruta = Path(sys.argv[1]).resolve()
-ejecutable = sys.argv[2]
-puerto = int(sys.argv[3])
-perfil = Path(sys.argv[4]).resolve()
-perfil.mkdir(parents=True, exist_ok=True)
-
-
-def propiedad(nombre, valor):
-    item = PropertyValue()
-    item.Name = nombre
-    item.Value = valor
-    return item
-
-
-proceso = subprocess.Popen(
-    [
-        ejecutable,
-        "--headless",
-        "--nologo",
-        "--nodefault",
-        "--nofirststartwizard",
-        "--norestore",
-        "--nolockcheck",
-        f"-env:UserInstallation=file://{perfil.as_posix()}",
-        (
-            "--accept=socket,host=127.0.0.1,"
-            f"port={puerto};urp;StarOffice.ComponentContext"
-        ),
-    ],
-    stdout=subprocess.DEVNULL,
-    stderr=subprocess.DEVNULL,
-)
-
-documento = None
-escritorio = None
-
-try:
-    contexto_local = uno.getComponentContext()
-    resolvedor = contexto_local.ServiceManager.createInstanceWithContext(
-        "com.sun.star.bridge.UnoUrlResolver",
-        contexto_local,
+        tempfile.mkdtemp(prefix="softdocutecno_toc_pdf_")
     )
 
-    contexto = None
-
-    for _ in range(100):
-        try:
-            contexto = resolvedor.resolve(
-                (
-                    "uno:socket,host=127.0.0.1,"
-                    f"port={puerto};urp;StarOffice.ComponentContext"
-                )
-            )
-            break
-        except Exception:
-            time.sleep(0.2)
-
-    if contexto is None:
-        raise SystemExit(3)
-
-    escritorio = contexto.ServiceManager.createInstanceWithContext(
-        "com.sun.star.frame.Desktop",
-        contexto,
-    )
-
-    documento = escritorio.loadComponentFromURL(
-        uno.systemPathToFileUrl(str(ruta)),
-        "_blank",
-        0,
-        (
-            propiedad("Hidden", True),
-            propiedad("ReadOnly", False),
-            propiedad("UpdateDocMode", 3),
-        ),
-    )
-
-    if documento is None:
-        raise SystemExit(4)
-
     try:
-        documento.updateLinks()
-    except Exception:
-        pass
+        perfil = carpeta_temporal / "perfil_libreoffice"
+        perfil.mkdir(parents=True, exist_ok=True)
 
-    try:
-        documento.getTextFields().refresh()
-    except Exception:
-        pass
+        entorno = os.environ.copy()
+        entorno.update(
+            {
+                "HOME": str(carpeta_temporal),
+                "TMPDIR": str(carpeta_temporal),
+                "SAL_USE_VCLPLUGIN": "svp",
+                "QT_QPA_PLATFORM": "offscreen",
+                "OMP_NUM_THREADS": "1",
+                "MALLOC_ARENA_MAX": "2",
+            }
+        )
 
-    try:
-        documento.calculateAll()
-    except Exception:
-        pass
+        comando = [
+            ejecutable,
+            "--headless",
+            "--nologo",
+            "--nodefault",
+            "--nofirststartwizard",
+            "--norestore",
+            "--nolockcheck",
+            (
+                "-env:UserInstallation="
+                f"file://{perfil.as_posix()}"
+            ),
+            "--convert-to",
+            "pdf:writer_pdf_Export",
+            "--outdir",
+            str(carpeta_temporal),
+            str(ruta_docx),
+        ]
 
-    indices = documento.getDocumentIndexes()
-
-    for _ in range(2):
-        for numero in range(indices.getCount()):
-            indices.getByIndex(numero).update()
-
-        try:
-            documento.getTextFields().refresh()
-        except Exception:
-            pass
-
-        try:
-            documento.calculateAll()
-        except Exception:
-            pass
-
-        time.sleep(0.5)
-
-    documento.store()
-    documento.close(True)
-    documento = None
-
-    try:
-        escritorio.terminate()
-    except Exception:
-        pass
-
-    escritorio = None
-
-finally:
-    if documento is not None:
-        try:
-            documento.close(True)
-        except Exception:
-            pass
-
-    if escritorio is not None:
-        try:
-            escritorio.terminate()
-        except Exception:
-            pass
-
-    try:
-        proceso.wait(timeout=15)
-    except Exception:
-        proceso.terminate()
-
-        try:
-            proceso.wait(timeout=5)
-        except Exception:
-            proceso.kill()
-""",
-        encoding="utf-8",
-    )
-
-    entorno = os.environ.copy()
-    entorno.update(
-        {
-            "HOME": str(carpeta_temporal),
-            "TMPDIR": str(carpeta_temporal),
-            "SAL_USE_VCLPLUGIN": "svp",
-            "QT_QPA_PLATFORM": "offscreen",
-            "OMP_NUM_THREADS": "1",
-            "MALLOC_ARENA_MAX": "2",
-        }
-    )
-
-    proceso_worker = None
-
-    try:
-        proceso_worker = subprocess.Popen(
-            [
-                python_sistema,
-                str(script_actualizacion),
-                str(ruta_docx),
-                ejecutable,
-                str(puerto),
-                str(perfil),
-            ],
+        resultado = subprocess.run(
+            comando,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             env=entorno,
-            start_new_session=True,
+            timeout=90,
+            check=False,
         )
 
-        try:
-            codigo_salida = proceso_worker.wait(timeout=100)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(
-                    os.getpgid(proceso_worker.pid),
-                    signal.SIGTERM,
+        ruta_pdf = carpeta_temporal / f"{ruta_docx.stem}.pdf"
+
+        if resultado.returncode != 0 or not ruta_pdf.exists():
+            return False
+
+        lector = PdfReader(str(ruta_pdf))
+        paginas: list[tuple[int, list[str]]] = []
+
+        for numero_pagina, pagina in enumerate(lector.pages, start=1):
+            texto_pagina = pagina.extract_text() or ""
+            lineas = [
+                normalizar_busqueda(linea)
+                for linea in texto_pagina.splitlines()
+                if normalizar_busqueda(linea)
+            ]
+            paginas.append((numero_pagina, lineas))
+
+        pagina_indice = 0
+
+        for numero_pagina, lineas in paginas[:4]:
+            if any(
+                "tabla de contenido" in linea
+                for linea in lineas
+            ):
+                pagina_indice = numero_pagina
+
+        paginas_titulos: dict[str, int] = {}
+
+        for titulo in titulos_toc:
+            titulo_normalizado = normalizar_busqueda(titulo)
+
+            for numero_pagina, lineas in paginas:
+                if numero_pagina <= pagina_indice:
+                    continue
+
+                encontrado = any(
+                    linea == titulo_normalizado
+                    or linea.startswith(f"{titulo_normalizado} ")
+                    for linea in lineas
                 )
-            except Exception:
-                proceso_worker.terminate()
 
-            try:
-                codigo_salida = proceso_worker.wait(timeout=8)
-            except Exception:
-                try:
-                    os.killpg(
-                        os.getpgid(proceso_worker.pid),
-                        signal.SIGKILL,
+                if encontrado:
+                    paginas_titulos[titulo] = numero_pagina
+                    break
+
+        if len(paginas_titulos) < 10:
+            return False
+
+        with ZipFile(ruta_docx, "r") as archivo_entrada:
+            contenido_zip = {
+                nombre: archivo_entrada.read(nombre)
+                for nombre in archivo_entrada.namelist()
+            }
+
+        documento_xml = etree.fromstring(
+            contenido_zip["word/document.xml"]
+        )
+        espacios = {
+            "w": (
+                "http://schemas.openxmlformats.org/"
+                "wordprocessingml/2006/main"
+            )
+        }
+        parrafos = documento_xml.xpath(
+            ".//w:p",
+            namespaces=espacios,
+        )
+
+        indice_parrafo_toc = None
+
+        for indice, parrafo in enumerate(parrafos):
+            texto_parrafo = "".join(
+                parrafo.xpath(
+                    ".//w:t/text()",
+                    namespaces=espacios,
+                )
+            )
+
+            if normalizar_busqueda(texto_parrafo) == "tabla de contenido":
+                indice_parrafo_toc = indice
+                break
+
+        if indice_parrafo_toc is None:
+            return False
+
+        parrafos_toc = parrafos[
+            indice_parrafo_toc + 1:
+            indice_parrafo_toc + 1 + len(titulos_toc)
+        ]
+        actualizados = 0
+
+        for titulo, parrafo in zip(titulos_toc, parrafos_toc):
+            numero_pagina = paginas_titulos.get(titulo)
+
+            if numero_pagina is None:
+                continue
+
+            nodos_texto = parrafo.xpath(
+                ".//w:t",
+                namespaces=espacios,
+            )
+
+            for nodo in reversed(nodos_texto):
+                valor = nodo.text or ""
+
+                if re.search(r"\d+\s*$", valor):
+                    nodo.text = re.sub(
+                        r"\d+\s*$",
+                        str(numero_pagina),
+                        valor,
                     )
-                except Exception:
-                    proceso_worker.kill()
+                    actualizados += 1
+                    break
 
-                codigo_salida = proceso_worker.wait(timeout=5)
+        if actualizados < 10:
+            return False
 
-        return codigo_salida == 0 and ruta_docx.exists()
+        contenido_zip["word/document.xml"] = etree.tostring(
+            documento_xml,
+            xml_declaration=True,
+            encoding="UTF-8",
+            standalone="yes",
+        )
+
+        ruta_temporal_docx = carpeta_temporal / "informe_actualizado.docx"
+
+        with ZipFile(
+            ruta_temporal_docx,
+            "w",
+            ZIP_DEFLATED,
+        ) as archivo_salida:
+            for nombre, contenido in contenido_zip.items():
+                archivo_salida.writestr(nombre, contenido)
+
+        shutil.copy2(ruta_temporal_docx, ruta_docx)
+        return True
+
+    except (
+        OSError,
+        subprocess.SubprocessError,
+        ValueError,
+        KeyError,
+        etree.XMLSyntaxError,
+    ):
+        return False
 
     except Exception:
         return False
 
     finally:
-        if proceso_worker is not None and proceso_worker.poll() is None:
-            try:
-                os.killpg(
-                    os.getpgid(proceso_worker.pid),
-                    signal.SIGKILL,
-                )
-            except Exception:
-                proceso_worker.kill()
-
-        shutil.rmtree(carpeta_temporal, ignore_errors=True)
+        shutil.rmtree(
+            carpeta_temporal,
+            ignore_errors=True,
+        )
 
 
 
@@ -2399,6 +2395,7 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
 
     documento.save(str(ruta_salida))
 
+    # Actualiza los números reales sin UNO; si falla, conserva el DOCX.
     actualizar_toc_con_libreoffice(ruta_salida)
 
     datos_json = serializar_datos_informe(datos)
