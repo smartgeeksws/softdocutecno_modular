@@ -40,7 +40,7 @@ from utils.validaciones import validar_campos_obligatorios
 
 
 VERSION_INFORME_TECNICO_FINAL = (
-    "VERSION_APROBADA_RESULTADOS_REDACTADOS_SIN_COPIA_LITERAL"
+    "VERSION_APROBADA_DESARROLLO_METODOLOGIAS_ACTIVIDADES_450"
 )
 CODIGO_FORMATO_INFORME = "GCDTP-F-023 V01"
 NOMBRE_PLANTILLA_INFORME = "GCDTP-F-023_V01_Formato_Informe_Final.docx"
@@ -1285,10 +1285,6 @@ def _complemento_apartado(clave: str, datos: dict) -> str:
     entregables = datos.get("entregables_proyecto_base", "")
     innovacion = datos.get("innovacion_proyecto_base", "")
     impacto = datos.get("impacto_proyecto_base", "")
-    actividades = actividades_en_texto(
-        datos.get("actividades_ejecutadas_base", [])
-    )
-
     complementos = {
         "introduccion": (
             "El alcance del informe se limita a la experiencia efectivamente "
@@ -1323,18 +1319,21 @@ def _complemento_apartado(clave: str, datos: dict) -> str:
             "se controlaron los cambios durante el desarrollo."
         ),
         "desarrollo_proyecto": (
-            f"Las actividades reportadas fueron: {actividades} La descripción del "
-            "desarrollo las organiza en una secuencia técnica, identifica relaciones "
-            "entre ellas y explica su contribución a la construcción de la solución. "
-            "Los entregables se presentan como productos del proceso y no como nuevas "
-            "actividades, lo que evita duplicaciones y conserva claridad documental."
+            f"El desarrollo debe explicar cómo las metodologías {metodologia} orientaron "
+            "la ejecución del proyecto y cómo sus principios se aplicaron durante las "
+            "fases de análisis, planeación, diseño, construcción, integración, revisión "
+            "y ajuste. Las actividades se incorporan mediante una narración técnica "
+            "continua, previamente corregida y reformulada, sin reproducir literalmente "
+            "el texto diligenciado por el usuario ni convertir el apartado en una lista. "
+            "Cada acción debe relacionarse con decisiones, procedimientos, componentes, "
+            "validaciones o avances concretos dentro de la solución."
         ),
         "resultados_obtenidos": (
-            f"Los entregables informados fueron: {entregables} La valoración de los "
-            "resultados se realiza por su correspondencia con los objetivos, su función "
-            "dentro de la solución y su aporte al nivel TRL alcanzado. La tabla de "
-            "actividades deja disponibles espacios de evidencia para incorporar enlaces "
-            "en Word sin exigir archivos durante el diligenciamiento."
+            "La valoración de los resultados se realiza por su correspondencia con los "
+            "objetivos, su función dentro de la solución y su aporte al nivel TRL "
+            "alcanzado. La tabla de entregables deja disponibles espacios de evidencia "
+            "para incorporar enlaces en Word sin exigir archivos durante el "
+            "diligenciamiento."
         ),
         "analisis_viabilidad": (
             "La viabilidad se examina desde condiciones técnicas, operativas, económicas, "
@@ -1513,6 +1512,10 @@ def ajustar_rango_palabras(
     maximo: int = 340,
 ) -> str:
     resultado = limpiar_texto(texto)
+
+    if clave == "desarrollo_proyecto":
+        minimo = 450
+        maximo = 520
 
     for fragmento in [
         _complemento_apartado(clave, datos),
@@ -1752,13 +1755,37 @@ def contenido_modo_prueba(datos: dict) -> dict:
         "actividades_corregidas": actividades_corregidas,
         "entregables_corregidos": entregables_corregidos,
         "desarrollo_proyecto": (
-            f"El desarrollo se organizó con base en {metodologia}. Las actividades "
-            "ejecutadas fueron: "
-            + " ".join(actividades_corregidas)
-            + " La secuencia describe cómo se pasó del análisis y el diseño a la "
-            "construcción, integración, revisión y ajuste de la solución. Cada actividad "
-            "se relaciona con una decisión o avance concreto, mientras los entregables "
-            "se presentan como productos del proceso y no como actividades adicionales."
+            f"El desarrollo del proyecto se estructuró mediante la integración de "
+            f"{metodologia}, utilizando sus principios para organizar una secuencia "
+            "coherente de análisis, definición, diseño, implementación, integración, "
+            "revisión y ajuste. Las actividades suministradas fueron previamente "
+            "corregidas en ortografía, redacción y precisión técnica antes de ser "
+            "incorporadas al relato. En lugar de reproducirlas como una lista, el "
+            "apartado explica su relación funcional dentro del proceso, identifica las "
+            "decisiones que orientaron cada etapa y muestra cómo contribuyeron a la "
+            "consolidación progresiva de la solución. La metodología permitió ordenar "
+            "los requerimientos, priorizar acciones, revisar avances y establecer "
+            "criterios para efectuar ajustes. Las actividades de comprensión y análisis "
+            "sirvieron para delimitar la necesidad, reconocer restricciones y definir "
+            "las condiciones que debía atender la propuesta. Posteriormente, las tareas "
+            "de diseño permitieron traducir esas necesidades en componentes, estructuras "
+            "o especificaciones técnicas. Durante la construcción se desarrollaron e "
+            "integraron los elementos necesarios, manteniendo correspondencia con los "
+            "objetivos y con el alcance previsto. Las acciones de revisión facilitaron "
+            "la identificación de inconsistencias, oportunidades de mejora y ajustes "
+            "requeridos antes de consolidar los productos finales. La combinación de "
+            "metodologías aportó una lógica de trabajo complementaria: los enfoques "
+            "centrados en el usuario fortalecieron la comprensión de necesidades; los "
+            "esquemas iterativos facilitaron ajustes progresivos; y los modelos de "
+            "ingeniería aportaron trazabilidad entre requerimientos, construcción y "
+            "verificación. Esta articulación permitió que las actividades no se "
+            "ejecutaran como acciones aisladas, sino como partes de un proceso técnico "
+            "relacionado. El relato conserva el orden lógico del trabajo, explica la "
+            "contribución de cada fase y diferencia claramente las actividades de los "
+            "entregables obtenidos. De esta manera, el desarrollo documenta la evolución "
+            "real del proyecto, presenta las decisiones más relevantes y establece una "
+            "base comprensible para revisar los resultados, la viabilidad y la "
+            "continuidad tecnológica."
         ),
         "resultados_obtenidos": resultados_modo_prueba_sin_copia(
             datos,
@@ -1930,6 +1957,74 @@ def normalizar_contenido(
     return resultado
 
 
+def reescribir_desarrollo_sin_copia_literal(
+    texto_desarrollo: str,
+    actividades_corregidas: list[str],
+    actividades_originales: list[str],
+    datos: dict,
+    modelo_openai: str,
+) -> str:
+    """
+    Reescribe Desarrollo del proyecto cuando detecta fragmentos literales de
+    las actividades originales o corregidas.
+    """
+    metodologia = metodologias_en_texto(datos)
+
+    try:
+        respuesta = generar_json_openai(
+            instrucciones=(
+                "Actúa como redactor técnico senior de TecnoParque SENA. "
+                "Reescribe exclusivamente el apartado Desarrollo del proyecto "
+                "en español formal, con 450 a 520 palabras. Integra todas las "
+                "metodologías indicadas y las actividades ejecutadas dentro de "
+                "una narración técnica continua. Corrige ortografía, gramática, "
+                "puntuación, coherencia y precisión técnica. No copies, enumeres "
+                "ni reproduzcas literalmente las actividades originales o "
+                "corregidas. No inventes tecnologías, resultados, cantidades ni "
+                "validaciones. Responde exclusivamente en JSON válido con la "
+                "clave desarrollo_proyecto."
+            ),
+            entrada=(
+                "METODOLOGÍAS UTILIZADAS\n"
+                f"{metodologia}\n\n"
+                "ACTIVIDADES CORREGIDAS COMO FUENTE CONCEPTUAL\n"
+                f"{actividades_en_texto(actividades_corregidas)}\n\n"
+                "TEXTO QUE DEBE REESCRIBIRSE\n"
+                f"{texto_desarrollo}\n\n"
+                "ESTRUCTURA JSON\n"
+                '{"desarrollo_proyecto": "450 a 520 palabras"}'
+            ),
+            modelo=modelo_openai,
+            temperature=0.1,
+        )
+
+        if isinstance(respuesta, dict):
+            reescrito = limpiar_texto(
+                str(respuesta.get("desarrollo_proyecto", ""))
+            )
+            fuentes = actividades_originales + actividades_corregidas
+
+            if (
+                len(reescrito.split()) >= 450
+                and not contiene_copia_textual(reescrito, fuentes)
+            ):
+                return ajustar_rango_palabras(
+                    reescrito,
+                    "desarrollo_proyecto",
+                    datos,
+                )
+
+    except Exception:
+        pass
+
+    respaldo = contenido_modo_prueba(datos)["desarrollo_proyecto"]
+    return ajustar_rango_palabras(
+        respaldo,
+        "desarrollo_proyecto",
+        datos,
+    )
+
+
 def reescribir_resultados_sin_copia_literal(
     texto_resultados: str,
     entregables_corregidos: list[str],
@@ -2085,9 +2180,12 @@ REQUISITOS ESPECÍFICOS
   CRISP-DM, modelo V, DFMA, desarrollo iterativo de prototipos, DMAIC o
   investigación aplicada, pero menciona solo la combinación pertinente.
 - Actividades corregidas: conserva exactamente la cantidad y el sentido de las
-  actividades suministradas. Corrige ortografía y mejora la redacción. Cada
-  actividad debe ser breve, técnica y clara; no agregues entregables, estados,
-  observaciones ni evidencias.
+  actividades suministradas, pero nunca copies literalmente su redacción. Corrige
+  ortografía, gramática, puntuación y concordancia; reformula cada actividad con
+  lenguaje técnico, institucional y claro. Mejora su precisión cuando sea necesario
+  para identificar correctamente la acción realizada, el proceso desarrollado o el
+  componente intervenido, sin inventar tecnologías, resultados, cantidades,
+  validaciones, estados, observaciones, entregables ni evidencias.
 - Entregables corregidos: conserva exactamente la cantidad y el sentido de los
   entregables suministrados. Corrige ortografía, gramática y puntuación; mejora
   su redacción y precisión técnica para que cada elemento identifique claramente
@@ -2164,8 +2262,16 @@ METODOLOGÍA DETERMINADA
 Genera los apartados 7, 8, 9, 10, 11 y 12.
 
 REQUISITOS ESPECÍFICOS
-- Desarrollo: organiza la ejecución y articula la metodología seleccionada con las
-  actividades corregidas. No repitas la introducción.
+- Desarrollo: redacta un texto continuo de 450 a 520 palabras que integre todas
+  las metodologías seleccionadas por el usuario y las actividades corregidas. Explica
+  cómo los principios, etapas o prácticas de cada metodología se relacionaron con las
+  acciones desarrolladas y con la evolución técnica de la solución. No copies, enumeres
+  ni reproduzcas literalmente las actividades originales ni las actividades corregidas.
+  Reformula siempre su contenido dentro de una narración técnica, coherente y cronológica.
+  Corrige ortografía, gramática, puntuación y redacción; aplica mejora técnica cuando sea
+  necesaria para precisar procesos, decisiones, componentes, integraciones, pruebas o
+  ajustes, pero no inventes información. No repitas la introducción, los resultados ni
+  los entregables.
 - Resultados: utiliza exclusivamente los entregables corregidos como fuente
   conceptual y explica su relación con objetivos, actividades, innovación y TRL.
   Corrige y mejora completamente la redacción del apartado. No copies, enumeres
@@ -2194,7 +2300,7 @@ RECOMENDACIÓN OBLIGATORIA DE CONTINUIDAD TRL
 
 ESTRUCTURA JSON OBLIGATORIA
 {{
-  "desarrollo_proyecto": "300 a 340 palabras",
+  "desarrollo_proyecto": "450 a 520 palabras",
   "resultados_obtenidos": "300 a 340 palabras",
   "analisis_viabilidad": "300 a 340 palabras",
   "propiedad_transferencia": "300 a 340 palabras",
@@ -2218,6 +2324,30 @@ ESTRUCTURA JSON OBLIGATORIA
 
     contenido["actividades_corregidas"] = actividades_corregidas
     contenido["entregables_corregidos"] = entregables_corregidos
+    desarrollo_generado = limpiar_texto(
+        str(contenido.get("desarrollo_proyecto", ""))
+    )
+    fuentes_actividades = (
+        actividades_originales + actividades_corregidas
+    )
+
+    if (
+        contiene_copia_textual(
+            desarrollo_generado,
+            fuentes_actividades,
+        )
+        or len(desarrollo_generado.split()) < 450
+    ):
+        contenido["desarrollo_proyecto"] = (
+            reescribir_desarrollo_sin_copia_literal(
+                texto_desarrollo=desarrollo_generado,
+                actividades_corregidas=actividades_corregidas,
+                actividades_originales=actividades_originales,
+                datos=datos,
+                modelo_openai=modelo_openai,
+            )
+        )
+
     resultados_generados = limpiar_texto(
         str(contenido.get("resultados_obtenidos", ""))
     )
@@ -2241,11 +2371,39 @@ ESTRUCTURA JSON OBLIGATORIA
     )
     contenido["anexos"] = anexos_manuales()
 
-    return normalizar_contenido(
+    contenido_normalizado = normalizar_contenido(
         contenido,
         respaldo,
         datos,
     )
+
+    desarrollo_final = contenido_normalizado["desarrollo_proyecto"]
+    fuentes_actividades = (
+        actividades_originales
+        + contenido_normalizado.get("actividades_corregidas", [])
+    )
+
+    if (
+        contiene_copia_textual(
+            desarrollo_final,
+            fuentes_actividades,
+        )
+        or len(desarrollo_final.split()) < 450
+    ):
+        contenido_normalizado["desarrollo_proyecto"] = (
+            reescribir_desarrollo_sin_copia_literal(
+                texto_desarrollo=desarrollo_final,
+                actividades_corregidas=contenido_normalizado.get(
+                    "actividades_corregidas",
+                    [],
+                ),
+                actividades_originales=actividades_originales,
+                datos=datos,
+                modelo_openai=modelo_openai,
+            )
+        )
+
+    return contenido_normalizado
 
 
 # =====================================================
@@ -2793,8 +2951,9 @@ def render_informe_tecnico_final(
             len(contenido.get("entregables_corregidos", [])),
         )
         st.caption(
-            "El desarrollo del proyecto fue redactado articulando la metodología "
-            "seleccionada con las actividades registradas."
+            "El desarrollo del proyecto fue redactado con una extensión de 450 a "
+            "520 palabras, integrando todas las metodologías seleccionadas con las "
+            "actividades previamente corregidas, reformuladas y mejoradas técnicamente."
         )
 
         st.markdown("### Vista previa de la tabla de resultados")
