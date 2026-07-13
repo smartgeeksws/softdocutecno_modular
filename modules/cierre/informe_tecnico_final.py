@@ -13,6 +13,7 @@ import tempfile
 import unicodedata
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import streamlit as st
@@ -40,7 +41,7 @@ from utils.validaciones import validar_campos_obligatorios
 
 
 VERSION_INFORME_TECNICO_FINAL = (
-    "VERSION_APROBADA_METODOLOGIA_FASES_DESARROLLO_POR_ACTIVIDAD"
+    "VERSION_APROBADA_NORMATIVIDAD_COLOMBIA_INTERNACIONAL"
 )
 CODIGO_FORMATO_INFORME = "GCDTP-F-023 V01"
 NOMBRE_PLANTILLA_INFORME = "GCDTP-F-023_V01_Formato_Informe_Final.docx"
@@ -94,6 +95,8 @@ CLAVES_CONTENIDO = [
     "entregables_corregidos",
     "desarrollo_proyecto",
     "desarrollo_actividades",
+    "normatividad_aplicable",
+    "normas_aplicables",
     "resultados_obtenidos",
     "analisis_viabilidad",
     "propiedad_transferencia",
@@ -580,13 +583,14 @@ def configurar_estilos_y_tabla_contenido(documento: Document) -> None:
         "5. Estado del arte y estado de la técnica",
         "6. Metodología de desarrollo",
         "7. Desarrollo del proyecto",
-        "8. Resultados obtenidos",
-        "9. Análisis de viabilidad",
-        "10. Propiedad intelectual y transferencia tecnológica",
-        "11. Impacto del proyecto",
-        "12. Conclusiones",
-        "13. Referencias bibliográficas",
-        "14. Anexos",
+        "8. Normatividad",
+        "9. Resultados obtenidos",
+        "10. Análisis de viabilidad",
+        "11. Propiedad intelectual y transferencia tecnológica",
+        "12. Impacto del proyecto",
+        "13. Conclusiones",
+        "14. Referencias bibliográficas",
+        "15. Anexos",
     ]
     titulos_nivel_2 = [
         "4.1 Objetivo General",
@@ -648,7 +652,7 @@ def configurar_estilos_y_tabla_contenido(documento: Document) -> None:
 def insertar_desarrollo_actividades(
     parrafo_ancla: Paragraph,
     actividades: list[dict],
-) -> None:
+) -> Paragraph:
     """Inserta una subsección por actividad y deja espacio para evidencias."""
     cursor = parrafo_ancla
 
@@ -711,6 +715,113 @@ def insertar_desarrollo_actividades(
             alineacion=WD_ALIGN_PARAGRAPH.LEFT,
         )
         cursor.paragraph_format.space_after = Pt(18)
+
+    return cursor
+
+
+def renumerar_apartados_posteriores(documento: Document) -> None:
+    """Desplaza la numeración de los apartados posteriores a Desarrollo."""
+    cambios = [
+        ("14. Anexos", "15. Anexos"),
+        ("13. Referencias bibliográficas", "14. Referencias bibliográficas"),
+        ("12. Conclusiones", "13. Conclusiones"),
+        ("11. Impacto del proyecto", "12. Impacto del proyecto"),
+        (
+            "10. Propiedad intelectual y transferencia tecnológica",
+            "11. Propiedad intelectual y transferencia tecnológica",
+        ),
+        ("9. Análisis de viabilidad", "10. Análisis de viabilidad"),
+        ("8. Resultados obtenidos", "9. Resultados obtenidos"),
+    ]
+
+    for titulo_actual, titulo_nuevo in cambios:
+        parrafo = buscar_parrafo(
+            documento,
+            titulo_actual,
+            coincidencia_exacta=True,
+        )
+        escribir_parrafo(
+            parrafo,
+            titulo_nuevo,
+            tamano=11,
+            negrita=True,
+            alineacion=WD_ALIGN_PARAGRAPH.LEFT,
+        )
+
+
+def insertar_normatividad(
+    parrafo_ancla: Paragraph,
+    texto_normativo: str,
+    normas: list[dict],
+) -> Paragraph:
+    """Inserta el apartado Normatividad y lista sus fuentes aplicables."""
+    encabezado = insertar_parrafo_despues(
+        parrafo_ancla,
+        "8. Normatividad",
+        estilo="Heading 1",
+    )
+    escribir_parrafo(
+        encabezado,
+        "8. Normatividad",
+        tamano=11,
+        negrita=True,
+        alineacion=WD_ALIGN_PARAGRAPH.LEFT,
+    )
+
+    cursor = insertar_parrafo_despues(encabezado)
+    escribir_parrafo(
+        cursor,
+        limpiar_texto(texto_normativo),
+        tamano=11,
+        alineacion=WD_ALIGN_PARAGRAPH.JUSTIFY,
+    )
+    cursor.paragraph_format.space_after = Pt(8)
+
+    normas_normalizadas = normalizar_normas_aplicables(normas)
+
+    for ambito, subtitulo in [
+        ("Colombia", "Normatividad colombiana"),
+        ("Internacional", "Normatividad y estándares internacionales"),
+    ]:
+        normas_ambito = [
+            item
+            for item in normas_normalizadas
+            if item["ambito"] == ambito
+        ]
+
+        if not normas_ambito:
+            continue
+
+        cursor = insertar_parrafo_despues(cursor)
+        escribir_parrafo(
+            cursor,
+            subtitulo,
+            tamano=11,
+            negrita=True,
+            alineacion=WD_ALIGN_PARAGRAPH.LEFT,
+        )
+        cursor.paragraph_format.space_before = Pt(6)
+        cursor.paragraph_format.space_after = Pt(4)
+
+        for item in normas_ambito:
+            cursor = insertar_parrafo_despues(cursor)
+            texto_item = (
+                f"• {item['norma']} — {item['entidad']}. "
+                f"{item['aplicacion']} "
+                f"Carácter de aplicación: {item['caracter_aplicacion']}. "
+                f"Fuente oficial: {item['fuente_oficial']}"
+            )
+            escribir_parrafo(
+                cursor,
+                texto_item,
+                tamano=10.5,
+                alineacion=WD_ALIGN_PARAGRAPH.JUSTIFY,
+            )
+            cursor.paragraph_format.left_indent = Cm(0.35)
+            cursor.paragraph_format.first_line_indent = Cm(-0.35)
+            cursor.paragraph_format.space_after = Pt(5)
+
+    return cursor
 
 
 def insertar_tabla_resultados(
@@ -1402,6 +1513,478 @@ Responde exclusivamente con JSON válido:
     return proyectos_validos[:2]
 
 
+def es_fuente_normativa_oficial(url: str) -> bool:
+    """Valida que la fuente pertenezca a una entidad oficial o normalizadora."""
+    try:
+        dominio = urlparse(str(url or "")).netloc.casefold()
+    except Exception:
+        return False
+
+    if dominio.startswith("www."):
+        dominio = dominio[4:]
+
+    dominios_permitidos = (
+        "suin-juriscol.gov.co",
+        "funcionpublica.gov.co",
+        "sic.gov.co",
+        "mintic.gov.co",
+        "mincit.gov.co",
+        "minenergia.gov.co",
+        "minambiente.gov.co",
+        "minsalud.gov.co",
+        "invima.gov.co",
+        "mintrabajo.gov.co",
+        "derechodeautor.gov.co",
+        "comunidadandina.org",
+        "icontec.org",
+        "iso.org",
+        "iec.ch",
+        "w3.org",
+        "itu.int",
+        "who.int",
+        "fao.org",
+        "codexalimentarius.fao.org",
+        "oecd.org",
+        "un.org",
+    )
+
+    return (
+        dominio.endswith(".gov.co")
+        or any(
+            dominio == permitido or dominio.endswith(f".{permitido}")
+            for permitido in dominios_permitidos
+        )
+        or dominio.endswith(".europa.eu")
+        or dominio == "europa.eu"
+        or dominio.endswith(".ieee.org")
+        or dominio == "ieee.org"
+        or dominio.endswith(".unesco.org")
+        or dominio == "unesco.org"
+    )
+
+
+def normalizar_normas_aplicables(valor: object) -> list[dict]:
+    """Normaliza y valida la lista de normas identificadas para el proyecto."""
+    elementos = valor if isinstance(valor, list) else []
+    resultado: list[dict] = []
+
+    for item in elementos:
+        if not isinstance(item, dict):
+            continue
+
+        norma = limpiar_texto(str(item.get("norma", "")))
+        ambito = limpiar_texto(str(item.get("ambito", "")))
+        entidad = limpiar_texto(str(item.get("entidad", "")))
+        aplicacion = limpiar_texto(str(item.get("aplicacion", "")))
+        caracter = limpiar_texto(
+            str(item.get("caracter_aplicacion", ""))
+        )
+        fuente = str(item.get("fuente_oficial", "")).strip()
+
+        if ambito.casefold().startswith("col"):
+            ambito = "Colombia"
+        elif ambito:
+            ambito = "Internacional"
+
+        if (
+            norma
+            and ambito
+            and entidad
+            and aplicacion
+            and caracter
+            and fuente.startswith(("http://", "https://"))
+            and es_fuente_normativa_oficial(fuente)
+        ):
+            resultado.append(
+                {
+                    "ambito": ambito,
+                    "norma": norma,
+                    "entidad": entidad,
+                    "aplicacion": aplicacion,
+                    "caracter_aplicacion": caracter,
+                    "fuente_oficial": fuente,
+                }
+            )
+
+    return resultado[:10]
+
+
+def normatividad_modo_prueba(datos: dict) -> dict:
+    """
+    Genera una selección conservadora de normas para validar la estructura local.
+
+    En modo API esta información se reemplaza por una búsqueda web específica
+    para el proyecto.
+    """
+    texto_base = " ".join(
+        [
+            datos.get("nombre_proyecto", ""),
+            datos.get("descripcion_general_proyecto", ""),
+            datos.get("entregables_proyecto_base", ""),
+            datos.get("innovacion_proyecto_base", ""),
+            actividades_en_texto(
+                datos.get("actividades_ejecutadas_base", [])
+            ),
+        ]
+    ).casefold()
+
+    normas: list[dict] = []
+
+    if any(
+        termino in texto_base
+        for termino in [
+            "dato",
+            "usuario",
+            "registro",
+            "plataforma",
+            "aplicación",
+            "sistema web",
+            "base de datos",
+            "formulario",
+            "cámara",
+            "biométr",
+        ]
+    ):
+        normas.extend(
+            [
+                {
+                    "ambito": "Colombia",
+                    "norma": "Ley 1581 de 2012",
+                    "entidad": "Congreso de Colombia",
+                    "aplicacion": (
+                        "Debe considerarse cuando la solución recolecte, almacene, "
+                        "consulte, transmita o elimine datos personales."
+                    ),
+                    "caracter_aplicacion": (
+                        "Obligatoria cuando exista tratamiento de datos personales"
+                    ),
+                    "fuente_oficial": (
+                        "https://www.suin-juriscol.gov.co/"
+                        "viewDocument.asp?id=1684507"
+                    ),
+                },
+                {
+                    "ambito": "Internacional",
+                    "norma": "ISO/IEC 27001:2022",
+                    "entidad": (
+                        "International Organization for Standardization e IEC"
+                    ),
+                    "aplicacion": (
+                        "Sirve como referencia para gestionar riesgos de seguridad "
+                        "de la información, controles, acceso y mejora continua."
+                    ),
+                    "caracter_aplicacion": (
+                        "Referencia técnica voluntaria, salvo exigencia contractual"
+                    ),
+                    "fuente_oficial": "https://www.iso.org/standard/27001",
+                },
+            ]
+        )
+
+    if any(
+        termino in texto_base
+        for termino in [
+            "software",
+            "aplicación",
+            "plataforma",
+            "contenido",
+            "diseño",
+            "video",
+            "imagen",
+            "manual",
+            "documentación",
+        ]
+    ):
+        normas.extend(
+            [
+                {
+                    "ambito": "Colombia",
+                    "norma": "Ley 23 de 1982 y Ley 1915 de 2018",
+                    "entidad": "Congreso de Colombia",
+                    "aplicacion": (
+                        "Orientan la protección de software, documentación, "
+                        "contenidos, diseños y demás obras originales desarrolladas."
+                    ),
+                    "caracter_aplicacion": (
+                        "Obligatoria en materia de derecho de autor"
+                    ),
+                    "fuente_oficial": (
+                        "https://www.suin-juriscol.gov.co/"
+                        "viewDocument.asp?id=30035790"
+                    ),
+                },
+                {
+                    "ambito": "Internacional",
+                    "norma": "Decisión Andina 351 de 1993",
+                    "entidad": "Comunidad Andina",
+                    "aplicacion": (
+                        "Establece el régimen común de derecho de autor y derechos "
+                        "conexos aplicable a obras del ingenio."
+                    ),
+                    "caracter_aplicacion": (
+                        "Norma supranacional aplicable en Colombia"
+                    ),
+                    "fuente_oficial": (
+                        "https://www.comunidadandina.org/"
+                        "StaticFiles/DocOf/DEC351.pdf"
+                    ),
+                },
+            ]
+        )
+
+    if any(
+        termino in texto_base
+        for termino in [
+            "venta",
+            "cliente",
+            "consumidor",
+            "comercialización",
+            "producto",
+            "servicio",
+            "garantía",
+        ]
+    ):
+        normas.append(
+            {
+                "ambito": "Colombia",
+                "norma": "Ley 1480 de 2011",
+                "entidad": "Congreso de Colombia",
+                "aplicacion": (
+                    "Debe revisarse cuando el producto o servicio se ofrezca a "
+                    "consumidores, especialmente frente a información, seguridad, "
+                    "calidad, idoneidad y garantías."
+                ),
+                "caracter_aplicacion": (
+                    "Obligatoria cuando exista una relación de consumo"
+                ),
+                "fuente_oficial": (
+                    "https://www.suin-juriscol.gov.co/"
+                    "viewDocument.asp?id=1681955"
+                ),
+            }
+        )
+
+    if any(
+        termino in texto_base
+        for termino in [
+            "mensaje de datos",
+            "firma electrónica",
+            "comercio electrónico",
+            "transacción",
+            "pago",
+            "documento electrónico",
+        ]
+    ):
+        normas.append(
+            {
+                "ambito": "Colombia",
+                "norma": "Ley 527 de 1999",
+                "entidad": "Congreso de Colombia",
+                "aplicacion": (
+                    "Regula mensajes de datos, comercio electrónico y firmas "
+                    "digitales cuando estos elementos formen parte de la solución."
+                ),
+                "caracter_aplicacion": (
+                    "Obligatoria cuando se utilicen mensajes de datos o firmas digitales"
+                ),
+                "fuente_oficial": (
+                    "https://www.suin-juriscol.gov.co/"
+                    "viewDocument.asp?id=1662013"
+                ),
+            }
+        )
+
+    if normas and not any(
+        item.get("ambito") == "Internacional"
+        for item in normas
+    ):
+        normas.append(
+            {
+                "ambito": "Internacional",
+                "norma": "ISO 9001:2015",
+                "entidad": "International Organization for Standardization",
+                "aplicacion": (
+                    "Puede utilizarse como referencia para organizar procesos, "
+                    "controlar la calidad, documentar requisitos y promover la "
+                    "mejora continua del producto o servicio."
+                ),
+                "caracter_aplicacion": (
+                    "Referencia técnica voluntaria, salvo exigencia contractual"
+                ),
+                "fuente_oficial": (
+                    "https://www.iso.org/standard/62085.html"
+                ),
+            }
+        )
+
+    if not normas:
+        normas = [
+            {
+                "ambito": "Colombia",
+                "norma": "Ley 23 de 1982",
+                "entidad": "Congreso de Colombia",
+                "aplicacion": (
+                    "Debe considerarse para proteger la documentación, planos, "
+                    "textos, gráficos y demás creaciones originales del proyecto."
+                ),
+                "caracter_aplicacion": (
+                    "Obligatoria en materia de derecho de autor"
+                ),
+                "fuente_oficial": (
+                    "https://www.suin-juriscol.gov.co/"
+                    "viewDocument.asp?id=30035790"
+                ),
+            },
+            {
+                "ambito": "Internacional",
+                "norma": "Decisión Andina 351 de 1993",
+                "entidad": "Comunidad Andina",
+                "aplicacion": (
+                    "Complementa el marco de protección de las obras y contenidos "
+                    "originales generados en el proyecto."
+                ),
+                "caracter_aplicacion": (
+                    "Norma supranacional aplicable en Colombia"
+                ),
+                "fuente_oficial": (
+                    "https://www.comunidadandina.org/"
+                    "StaticFiles/DocOf/DEC351.pdf"
+                ),
+            },
+        ]
+
+    normas = normalizar_normas_aplicables(normas)
+
+    texto_normativo = (
+        "La normatividad aplicable debe interpretarse de acuerdo con la naturaleza "
+        "de la solución, los datos tratados, los usuarios, los componentes técnicos "
+        "y la etapa de implementación. Las disposiciones colombianas identificadas "
+        "establecen obligaciones que pueden resultar exigibles cuando se configure "
+        "su supuesto de aplicación, mientras que los estándares internacionales "
+        "funcionan como referentes técnicos o buenas prácticas, salvo que hayan sido "
+        "adoptados por una regulación, un contrato o un requisito sectorial. La "
+        "selección presentada no constituye una declaración de cumplimiento ni "
+        "sustituye la revisión especializada previa a la puesta en operación, "
+        "comercialización, certificación o escalamiento del proyecto. En cada fase "
+        "de continuidad deben verificarse la vigencia de las disposiciones, la "
+        "autoridad competente, los permisos aplicables, la gestión de evidencias y "
+        "las responsabilidades de quienes operen la solución."
+    )
+
+    return {
+        "normatividad_aplicable": texto_normativo,
+        "normas_aplicables": normas,
+    }
+
+
+def investigar_normatividad_aplicable(
+    datos: dict,
+    modelo_openai: str,
+) -> dict:
+    """
+    Identifica mediante búsqueda web la normatividad realmente relacionada con
+    el proyecto, usando fuentes oficiales colombianas e internacionales.
+    """
+    if OpenAI is None:
+        raise RuntimeError(
+            "La librería openai no está instalada y no es posible verificar "
+            "la normatividad aplicable."
+        )
+
+    api_key = obtener_api_key()
+
+    if not api_key:
+        raise RuntimeError(
+            "No se encontró OPENAI_API_KEY para investigar la normatividad."
+        )
+
+    client = OpenAI(api_key=api_key)
+
+    prompt = f"""
+Actúa como investigador de regulación tecnológica y normalización.
+
+Identifica la normatividad que debe considerarse para el siguiente proyecto de
+base tecnológica, tanto en Colombia como en el ámbito internacional.
+
+Proyecto: {datos.get('nombre_proyecto', '')}
+Descripción: {datos.get('descripcion_general_proyecto', '')}
+Línea tecnológica: {datos.get('linea_tecnologica', '')}
+Entregables: {datos.get('entregables_proyecto_base', '')}
+Innovación: {datos.get('innovacion_proyecto_base', '')}
+Actividades:
+{actividades_en_texto(datos.get('actividades_ejecutadas_base', []))}
+
+REGLAS
+- Selecciona únicamente normas directamente relacionadas con el proyecto.
+- Incluye leyes, decretos, resoluciones o reglamentos colombianos vigentes.
+- Incluye normas o estándares internacionales solo cuando sean pertinentes.
+- Distingue claramente entre obligación legal, aplicación condicionada,
+  norma supranacional y referencia técnica voluntaria.
+- No afirmes que el proyecto cumple una norma.
+- No inventes números, títulos, entidades, versiones ni enlaces.
+- Verifica vigencia y alcance en fuentes oficiales o entidades normalizadoras.
+- Para Colombia prioriza SUIN-Juriscol, Función Pública, SIC, MinTIC,
+  ministerios, INVIMA y demás autoridades competentes.
+- Para el ámbito internacional prioriza Comunidad Andina, ISO, IEC, W3C,
+  ITU, OMS, FAO, Codex, OCDE o Naciones Unidas, según el proyecto.
+- Entrega entre 4 y 10 normas en total. Si una categoría no aplica, omítela.
+- El texto introductorio debe tener entre 260 y 380 palabras y explicar por
+  qué el marco seleccionado resulta pertinente, sin convertirlo en asesoría
+  jurídica ni repetir toda la lista.
+
+Responde exclusivamente con JSON válido:
+{{
+  "normatividad_aplicable": "texto técnico de 260 a 380 palabras",
+  "normas_aplicables": [
+    {{
+      "ambito": "Colombia o Internacional",
+      "norma": "tipo, número, año y nombre oficial",
+      "entidad": "autoridad u organismo responsable",
+      "aplicacion": "relación concreta con el proyecto",
+      "caracter_aplicacion": "obligatoria, condicionada, supranacional o referencia técnica",
+      "fuente_oficial": "https://..."
+    }}
+  ]
+}}
+"""
+
+    respuesta = client.responses.create(
+        model=modelo_openai,
+        tools=[{"type": "web_search"}],
+        input=prompt,
+        temperature=0.1,
+    )
+
+    datos_respuesta = extraer_json_respuesta(
+        getattr(respuesta, "output_text", "")
+    )
+
+    texto_normativo = limpiar_texto(
+        str(datos_respuesta.get("normatividad_aplicable", ""))
+    )
+    normas = normalizar_normas_aplicables(
+        datos_respuesta.get("normas_aplicables", [])
+    )
+
+    ambitos = {item["ambito"] for item in normas}
+
+    if (
+        not texto_normativo
+        or len(normas) < 3
+        or "Colombia" not in ambitos
+        or "Internacional" not in ambitos
+    ):
+        raise RuntimeError(
+            "La búsqueda no produjo una selección normativa suficiente y "
+            "verificable. Intenta nuevamente o amplía la descripción del proyecto."
+        )
+
+    return {
+        "normatividad_aplicable": texto_normativo,
+        "normas_aplicables": normas,
+    }
+
+
 def referencias_bibliograficas_proyecto(datos: dict) -> list[str]:
     referencias = [
         limpiar_texto(item.get("referencia_apa", ""))
@@ -1417,7 +2000,17 @@ def referencias_bibliograficas_proyecto(datos: dict) -> list[str]:
         )
     )
 
-    return referencias
+    normatividad = datos.get("normatividad_investigada", {})
+    for item in normalizar_normas_aplicables(
+        normatividad.get("normas_aplicables", [])
+        if isinstance(normatividad, dict)
+        else []
+    ):
+        referencias.append(
+            f"{item['entidad']}. {item['norma']}. {item['fuente_oficial']}"
+        )
+
+    return list(dict.fromkeys(referencias))
 
 
 def anexos_manuales() -> list[str]:
@@ -2043,6 +2636,14 @@ def contenido_modo_prueba(datos: dict) -> dict:
             datos,
             actividades_corregidas,
         ),
+        "normatividad_aplicable": (
+            datos.get("normatividad_investigada", {})
+            or normatividad_modo_prueba(datos)
+        ).get("normatividad_aplicable", ""),
+        "normas_aplicables": (
+            datos.get("normatividad_investigada", {})
+            or normatividad_modo_prueba(datos)
+        ).get("normas_aplicables", []),
         "resultados_obtenidos": resultados_modo_prueba_sin_copia(
             datos,
             len(entregables_corregidos),
@@ -2119,6 +2720,15 @@ def normalizar_contenido(
                 actividades_base,
                 datos,
             )
+            continue
+
+        if clave == "normas_aplicables":
+            normas = normalizar_normas_aplicables(valor)
+            if not normas:
+                normas = normalizar_normas_aplicables(
+                    respaldo.get("normas_aplicables", [])
+                )
+            resultado[clave] = normas
             continue
 
         if clave in {
@@ -2539,7 +3149,7 @@ FASES DE REFERENCIA
 """
 
     instrucciones_bloque_2 = reglas_comunes + """
-Genera los apartados 7, 8, 9, 10, 11 y 12.
+Genera los apartados 7, 9, 10, 11, 12 y 13.
 
 REQUISITOS ESPECÍFICOS
 - Desarrollo del proyecto: genera una introducción técnica breve y una entrada
@@ -2609,6 +3219,17 @@ ESTRUCTURA JSON OBLIGATORIA
 
     contenido["actividades_corregidas"] = actividades_corregidas
     contenido["entregables_corregidos"] = entregables_corregidos
+
+    normatividad = datos.get("normatividad_investigada", {})
+    if not isinstance(normatividad, dict):
+        normatividad = {}
+    contenido["normatividad_aplicable"] = limpiar_texto(
+        str(normatividad.get("normatividad_aplicable", ""))
+    )
+    contenido["normas_aplicables"] = normalizar_normas_aplicables(
+        normatividad.get("normas_aplicables", [])
+    )
+
     contenido["desarrollo_actividades"] = (
         normalizar_desarrollo_actividades(
             contenido.get("desarrollo_actividades", []),
@@ -2679,7 +3300,7 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
     documento = Document(str(plantilla))
 
     eliminar_instrucciones_y_control_cambios(documento)
-    configurar_estilos_y_tabla_contenido(documento)
+    renumerar_apartados_posteriores(documento)
     marcar_clasificacion(
         documento,
         datos.get("clasificacion_informacion", "Pública"),
@@ -2721,22 +3342,22 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
             contenido["desarrollo_proyecto"],
         ),
         (
-            "8. Resultados obtenidos",
+            "9. Resultados obtenidos",
             contenido["resultados_obtenidos"],
         ),
         (
-            "9. Análisis de viabilidad",
+            "10. Análisis de viabilidad",
             contenido["analisis_viabilidad"],
         ),
         (
-            "10. Propiedad intelectual y transferencia tecnológica",
+            "11. Propiedad intelectual y transferencia tecnológica",
             contenido["propiedad_transferencia"],
         ),
         (
-            "11. Impacto del proyecto",
+            "12. Impacto del proyecto",
             contenido["impacto_proyecto"],
         ),
-        ("12. Conclusiones", contenido["conclusiones"]),
+        ("13. Conclusiones", contenido["conclusiones"]),
     ]
 
     destinos: dict[str, Paragraph] = {}
@@ -2753,9 +3374,15 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
         )
         destinos[titulo] = destino
 
-    insertar_desarrollo_actividades(
+    ultimo_desarrollo = insertar_desarrollo_actividades(
         destinos["7. Desarrollo del proyecto"],
         contenido["desarrollo_actividades"],
+    )
+
+    insertar_normatividad(
+        ultimo_desarrollo,
+        contenido["normatividad_aplicable"],
+        contenido["normas_aplicables"],
     )
 
     encabezado_objetivos_especificos = buscar_parrafo(
@@ -2782,13 +3409,13 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
     # Tabla institucional de resultados basada únicamente en los entregables.
     insertar_tabla_resultados(
         documento,
-        destinos["8. Resultados obtenidos"],
+        destinos["9. Resultados obtenidos"],
         contenido["entregables_corregidos"],
     )
 
     encabezado_referencias = buscar_parrafo(
         documento,
-        "13. Referencias bibliográficas",
+        "14. Referencias bibliográficas",
     )
     destino_referencias = parrafo_siguiente(encabezado_referencias)
     escribir_lista_en_parrafos(
@@ -2798,7 +3425,7 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
 
     encabezado_anexos = buscar_parrafo(
         documento,
-        "14. Anexos",
+        "15. Anexos",
         coincidencia_exacta=True,
     )
     # La plantilla trae un salto manual antes de Anexos. Se elimina para
@@ -2832,7 +3459,7 @@ def generar_docx_informe_tecnico_final(datos: dict) -> str:
     # Limpieza final del salto heredado antes de Anexos, después de aplicar estilos.
     encabezado_anexos_final = buscar_parrafo(
         documento,
-        "14. Anexos",
+        "15. Anexos",
         coincidencia_exacta=True,
     )
     encabezado_anexos_final.paragraph_format.page_break_before = False
@@ -2873,8 +3500,8 @@ def render_informe_tecnico_final(
 
     st.info(
         "El formulario solicita los datos institucionales, la descripción general, "
-        "los entregables, la innovación, la metodología utilizada, las actividades "
-        "desarrolladas y el impacto. Las actividades se escriben en un solo campo "
+        "los entregables, la innovación, la metodología utilizada, las actividades, "
+        "la normatividad aplicable y el impacto. Las actividades se escriben en un solo campo "
         "y se articulan con la metodología para generar el desarrollo del proyecto. "
         "La tabla de contenido queda configurada para actualizarse automáticamente "
         "al abrir el archivo en Microsoft Word."
@@ -3141,18 +3768,27 @@ def render_informe_tecnico_final(
         )
 
         with st.spinner(
-            "Investigando dos referentes reales y generando los apartados "
-            "del informe entre 300 y 340 palabras."
+            "Investigando referentes reales, normatividad aplicable y generando "
+            "los apartados del informe."
         ):
             try:
                 if modo_prueba:
                     datos_base["referentes_estado_arte"] = (
                         referentes_modo_prueba(datos_base)
                     )
+                    datos_base["normatividad_investigada"] = (
+                        normatividad_modo_prueba(datos_base)
+                    )
                     contenido = contenido_modo_prueba(datos_base)
                 else:
                     datos_base["referentes_estado_arte"] = (
                         investigar_referentes_reales(
+                            datos_base,
+                            modelo_openai,
+                        )
+                    )
+                    datos_base["normatividad_investigada"] = (
+                        investigar_normatividad_aplicable(
                             datos_base,
                             modelo_openai,
                         )
@@ -3197,6 +3833,10 @@ def render_informe_tecnico_final(
         st.write(
             "**Entregables procesados para la tabla de resultados:**",
             len(contenido.get("entregables_corregidos", [])),
+        )
+        st.write(
+            "**Normas y estándares identificados:**",
+            len(contenido.get("normas_aplicables", [])),
         )
         st.caption(
             "El desarrollo del proyecto presenta cada actividad por separado, "
